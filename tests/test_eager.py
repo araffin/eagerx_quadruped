@@ -9,19 +9,17 @@ from eagerx.core.env import EagerxEnv
 from eagerx.core.graph import Graph
 
 import eagerx_quadruped.object  # noqa: F401
+import eagerx_quadruped.robots.go1.configs_go1 as go1_config
 
 
-def test_eagerx():
+def test_eagerx(skip=True):
     # disable test for now
-    return
+    if skip:
+        return
     roscore = eagerx.initialize("eagerx_core", anonymous=True, log_level=eagerx.log.INFO)
 
     # Initialize empty graph
     graph = Graph.create()
-
-    # Create solid object
-    # cube = eagerx.Object.make("Solid", "cube", urdf="cube_small.urdf", rate=5.0)
-    # graph.add(cube)
 
     # Create robot
     robot = eagerx.Object.make(
@@ -32,7 +30,8 @@ def test_eagerx():
         states=["pos"],
         rate=5.0,
         control_mode="position_control",
-        self_collision=False,
+        self_collision=True,
+        fixed_base=False,
     )
     graph.add(robot)
 
@@ -41,7 +40,7 @@ def test_eagerx():
     graph.connect(observation="position", source=robot.sensors.pos)
 
     # Show in the gui
-    graph.gui()
+    # graph.gui()
 
     # Define bridgesif
     bridge = eagerx.Bridge.make(
@@ -71,22 +70,29 @@ def test_eagerx():
         graph=graph,
         bridge=bridge,
         step_fn=step_fn,
-        exclude=["at"],
     )
 
     # obs_space = env.observation_space
 
     # Evaluate
-    # for eps in range(5000):
-    #     print(f"Episode {eps}")
-    #     _, done = env.reset(), False
-    #     while not done:
-    #         action = env.action_space.sample()
-    #         obs, reward, done, info = env.step(action)
-    #         # rgb = env.render("rgb_array")
+    try:
+        for eps in range(2):
+            print(f"Episode {eps}")
+            _, done = env.reset(), False
+            while not done:
+                # action = env.action_space.sample()
+                action = dict(joints=go1_config.INIT_JOINT_ANGLES)
+                obs, reward, done, info = env.step(action)
+                # rgb = env.render("rgb_array")
+    except KeyboardInterrupt:
+        raise
 
     print("Shutting down")
     env.shutdown()
     if roscore:
         roscore.shutdown()
     print("Shutdown")
+
+
+if __name__ == "__main__":
+    test_eagerx(skip=False)

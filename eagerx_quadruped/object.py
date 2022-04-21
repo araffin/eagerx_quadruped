@@ -2,6 +2,7 @@ import os
 from typing import List, Optional
 
 import eagerx.core.register as register
+import numpy as np
 from eagerx import EngineNode, EngineState, Object, SpaceConverter
 from eagerx.core.graph_engine import EngineGraph
 from eagerx.core.specs import ObjectSpec
@@ -15,7 +16,7 @@ from std_msgs.msg import Float32MultiArray
 import eagerx_quadruped.robots.go1.configs_go1 as go1_config
 
 
-class Quadruped:
+class Quadruped(Object):
     entity_id = "Quadruped"
 
     @staticmethod
@@ -25,7 +26,7 @@ class Quadruped:
     @register.config(
         joint_names=None,
         gripper_names=None,
-        fixed_base=True,
+        fixed_base=False,
         self_collision=True,
         base_pos=None,
         base_or=None,
@@ -55,8 +56,8 @@ class Quadruped:
         spec.sensors.pos.space_converter = SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
-            low=[-3.14159, -3.14159, -3.14159, -3.14159, -3.14159, -3.14159],
-            high=[3.14159, 3.14159, 3.14159, 3.14159, 3.14159, 3.14159],
+            low=go1_config.RL_LOWER_ANGLE_JOINT.tolist(),
+            high=go1_config.RL_UPPER_ANGLE_JOINT.tolist(),
         )
 
         # Set actuator properties: (space_converters, rate, etc...)
@@ -64,16 +65,16 @@ class Quadruped:
         spec.actuators.joint_control.space_converter = SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
-            low=[-3.14159, -3.14159, -3.14159, -3.14159, -3.14159, -3.14159],
-            high=[3.14159, 3.14159, 3.14159, 3.14159, 3.14159, 3.14159],
+            low=go1_config.RL_LOWER_ANGLE_JOINT.tolist(),
+            high=go1_config.RL_UPPER_ANGLE_JOINT.tolist(),
         )
 
         # Set model_state properties: (space_converters)
         spec.states.pos.space_converter = SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
-            low=[-3.14158, -1.85004, -1.76278, -3.14158, -1.86750, -3.14158],
-            high=[3.14158, 1.25663, 1.605702, 3.14158, 2.23402, 3.14158],
+            low=go1_config.RL_LOWER_ANGLE_JOINT.tolist(),
+            high=go1_config.RL_UPPER_ANGLE_JOINT.tolist(),
         )
 
     @staticmethod
@@ -107,7 +108,7 @@ class Quadruped:
         :return: ObjectSpec
         """
         # Performs all the steps to fill-in the params with registered info about all functions.
-        # Quadruped.initialize_spec(spec)
+        Quadruped.initialize_spec(spec)
 
         # Modify default agnostic params
         # Only allow changes to the agnostic params (rates, windows, (space)converters, etc...
@@ -118,7 +119,7 @@ class Quadruped:
 
         # Add registered agnostic params
         spec.config.joint_names = list(go1_config.JOINT_NAMES)
-        spec.config.base_pos = base_pos if base_pos else [0, 0, 0]
+        spec.config.base_pos = base_pos if base_pos else go1_config.INIT_POSITION
         spec.config.base_or = base_or if base_or else [0, 0, 0, 1]
         spec.config.self_collision = self_collision
         spec.config.fixed_base = fixed_base
@@ -161,9 +162,9 @@ class Quadruped:
             process=2,
             joints=spec.config.joint_names,
             mode=spec.config.control_mode,
-            vel_target=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            pos_gain=[0.45, 0.45, 0.65, 0.6, 0.45, 0.4],
-            vel_gain=[1.7, 1.7, 1.5, 1.3, 1.0, 1.0],
+            vel_target=np.zeros(len(go1_config.JOINT_NAMES)).tolist(),
+            pos_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
+            vel_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
         )
 
         # Connect all engine nodes
