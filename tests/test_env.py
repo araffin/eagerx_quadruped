@@ -1,5 +1,7 @@
 import gym
-import eagerx_quadruped
+
+import eagerx_quadruped  # noqa: F401
+
 
 def test_gym_env():
     env = gym.make("QuadrupedSpring-v0", render=False)

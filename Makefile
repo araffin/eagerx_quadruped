@@ -2,7 +2,7 @@
 PACKAGE_NAME=eagerx_quadruped
 
 SHELL=/bin/bash
-LINT_PATHS=${PACKAGE_NAME}/ *.py
+LINT_PATHS=${PACKAGE_NAME}/ *.py tests/
 
 pytest:
 	bash ./scripts/run_tests.sh
