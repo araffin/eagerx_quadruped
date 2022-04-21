@@ -1,8 +1,8 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="eagerx_ode",
-    packages=[package for package in find_packages() if package.startswith("eagerx_ode")],
+    name="eagerx_quadruped",
+    packages=[package for package in find_packages() if package.startswith("eagerx_quadruped")],
     # package_data={"sb3_contrib": ["py.typed", "version.txt"]},
     install_requires=["eagerx>=0.1.13"],
     extras_require={
