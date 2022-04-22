@@ -256,9 +256,9 @@ if __name__ == "__main__":
     omega_swing, omega_stance = {
         "JUMP": [4 * np.pi, 40 * np.pi],
         "TROT": [16 * np.pi, 4 * np.pi],
-        "WALK": [24 * np.pi, 25 * np.pi],
+        "WALK": [16 * np.pi, 4 * np.pi],
         "PACE": [20 * np.pi, 20 * np.pi],
-        "BOUND": [10 * np.pi, 40 * np.pi],
+        "BOUND": [10 * np.pi, 20 * np.pi],
     }[gait]
 
     cpg = HopfNetwork(
@@ -267,7 +267,7 @@ if __name__ == "__main__":
         omega_swing=omega_swing,
         omega_stance=omega_stance,
         time_step=TIME_STEP,
-        ground_clearance=0.05,  # foot swing height
+        ground_clearance=0.04,  # foot swing height
         ground_penetration=0.02,  # foot stance penetration into ground
         # robot_height=0.25,  # in nominal case (standing)
         # des_step_len = 0 for jumping

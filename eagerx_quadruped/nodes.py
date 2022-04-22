@@ -73,7 +73,7 @@ class CartesiandPDController(EngineNode):
         spec.config.vel_target = vel_target if vel_target else [0.0] * len(joints)
         spec.config.pos_gain = pos_gain if pos_gain else [0.2] * len(joints)
         spec.config.vel_gain = vel_gain if vel_gain else [0.2] * len(joints)
-        spec.config.max_force = max_force if max_force else [20.0] * len(joints)
+        spec.config.max_force = max_force if max_force else [15.0] * len(joints)
 
     def initialize(self, joints, mode, vel_target, pos_gain, vel_gain, max_force):
         # We will probably use self.simulator[self.obj_name] in callback & reset.

@@ -274,8 +274,8 @@ class Quadruped(Object):
             process=eagerx.process.BRIDGE,
             joints=spec.config.joint_names,
             vel_target=np.zeros(len(go1_config.JOINT_NAMES)).tolist(),
-            pos_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
-            vel_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
+            pos_gain=(1.0 * np.ones(len(go1_config.JOINT_NAMES))).tolist(),
+            vel_gain=(1.0 * np.ones(len(go1_config.JOINT_NAMES))).tolist(),
         )
 
         # Connect all engine nodes
