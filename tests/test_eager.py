@@ -50,7 +50,7 @@ def test_eagerx(skip=True):
         egl=True,
         is_reactive=True,
         real_time_factor=0,
-        process=eagerx.process.NEW_PROCESS,
+        process=eagerx.process.ENVIRONMENT,
     )
 
     # Define step function
@@ -58,7 +58,7 @@ def test_eagerx(skip=True):
         # Calculate reward
         rwd = 0
         # Determine done flag
-        done = steps > 500
+        done = steps > 200
         # Set info:
         info = dict()
         return obs, rwd, done, info
@@ -80,8 +80,8 @@ def test_eagerx(skip=True):
             print(f"Episode {eps}")
             _, done = env.reset(), False
             while not done:
-                # action = env.action_space.sample()
-                action = dict(joints=go1_config.INIT_JOINT_ANGLES)
+                action = env.action_space.sample()
+                # action = dict(joints=go1_config.INIT_JOINT_ANGLES)
                 obs, reward, done, info = env.step(action)
                 # rgb = env.render("rgb_array")
     except KeyboardInterrupt:

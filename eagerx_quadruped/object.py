@@ -22,7 +22,13 @@ class Quadruped(Object):
     @staticmethod
     @register.sensors(pos=Float32MultiArray)
     @register.actuators(joint_control=Float32MultiArray)
-    @register.engine_states(pos=Float32MultiArray)
+    @register.engine_states(
+        pos=Float32MultiArray,
+        base_pos=Float32MultiArray,
+        base_orientation=Float32MultiArray,
+        base_velocity=Float32MultiArray,
+        base_angular_velocity=Float32MultiArray,
+    )
     @register.config(
         joint_names=None,
         gripper_names=None,
@@ -73,8 +79,36 @@ class Quadruped(Object):
         spec.states.pos.space_converter = SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
-            low=go1_config.RL_LOWER_ANGLE_JOINT.tolist(),
-            high=go1_config.RL_UPPER_ANGLE_JOINT.tolist(),
+            low=go1_config.INIT_JOINT_ANGLES.tolist(),
+            high=go1_config.INIT_JOINT_ANGLES.tolist(),
+        )
+
+        spec.states.base_pos.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=go1_config.INIT_POSITION,
+            high=go1_config.INIT_POSITION,
+        )
+
+        spec.states.base_orientation.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=list(go1_config.INIT_ORIENTATION),
+            high=list(go1_config.INIT_ORIENTATION),
+        )
+
+        spec.states.base_velocity.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=[0, 0, 0],
+            high=[0, 0, 0],
+        )
+
+        spec.states.base_angular_velocity.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=[0, 0, 0],
+            high=[0, 0, 0],
         )
 
     @staticmethod
@@ -146,6 +180,11 @@ class Quadruped(Object):
 
         # Create engine_states (no agnostic states defined in this case)
         spec.PybulletBridge.states.pos = EngineState.make("JointState", joints=spec.config.joint_names, mode="position")
+
+        spec.PybulletBridge.states.base_pos = EngineState.make("LinkState", mode="position")
+        spec.PybulletBridge.states.base_orientation = EngineState.make("LinkState", mode="orientation")
+        spec.PybulletBridge.states.base_velocity = EngineState.make("LinkState", mode="velocity")
+        spec.PybulletBridge.states.base_angular_velocity = EngineState.make("LinkState", mode="angular_vel")
 
         # Create sensor engine nodes
         # Rate=None, but we will connect them to sensors (thus will use the rate set in the agnostic specification)
