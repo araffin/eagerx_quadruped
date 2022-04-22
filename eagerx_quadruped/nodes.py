@@ -142,7 +142,7 @@ class CartesiandPDController(EngineNode):
         )
 
         # Send action that has been applied.
-        return dict(action_applied=desired_joint_angles)
+        return dict(action_applied=Float32MultiArray(data=desired_joint_angles))
 
     @staticmethod
     def compute_inverse_kinematics(leg_id: int, xyz_coord: np.ndarray):
