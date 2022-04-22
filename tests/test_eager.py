@@ -20,13 +20,14 @@ def test_eagerx(skip=True):
 
     # Initialize empty graph
     graph = Graph.create()
+    rate = 100  # in Hz
 
     # Create robot
     robot = eagerx.Object.make(
         "Quadruped",
         "quadruped",
         actuators=["cartesian_control"],
-        rate=5.0,
+        rate=rate,
         control_mode="position_control",
         self_collision=True,
         fixed_base=False,
@@ -44,7 +45,7 @@ def test_eagerx(skip=True):
     # Define bridgesif
     bridge = eagerx.Bridge.make(
         "PybulletBridge",
-        rate=100.0,
+        rate=rate,
         gui=True,
         egl=True,
         is_reactive=True,
@@ -65,7 +66,7 @@ def test_eagerx(skip=True):
     # Initialize Environment
     env = EagerxEnv(
         name="rx",
-        rate=5.0,
+        rate=rate,
         graph=graph,
         bridge=bridge,
         step_fn=step_fn,

@@ -93,6 +93,13 @@ class CartesiandPDController(EngineNode):
         self._p = self.simulator["client"]
         self.physics_client_id = self._p._client
 
+        # Hack to have better visualizer
+        self._pybullet_client = self._p
+        self._pybullet_client.configureDebugVisualizer(self._pybullet_client.COV_ENABLE_RGB_BUFFER_PREVIEW, 0)
+        self._pybullet_client.configureDebugVisualizer(self._pybullet_client.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 0)
+        self._pybullet_client.configureDebugVisualizer(self._pybullet_client.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
+        self._pybullet_client.configureDebugVisualizer(self._pybullet_client.COV_ENABLE_GUI, 0)
+
         self.body_unique_id = []
         self.joint_indices = []
         for pb_name in joints:
