@@ -7,13 +7,10 @@ import numpy as np
 from eagerx import EngineNode, EngineState, Object, SpaceConverter
 from eagerx.core.graph_engine import EngineGraph
 from eagerx.core.specs import ObjectSpec
-
-# EAGERx IMPORTS
 from eagerx_pybullet.bridge import PybulletBridge
-
-# ROS IMPORTS
 from std_msgs.msg import Float32MultiArray
 
+import eagerx_quadruped.nodes  # noqa: F401
 import eagerx_quadruped.robots.go1.configs_go1 as go1_config
 
 
@@ -27,7 +24,10 @@ class Quadruped(Object):
         base_orientation=Float32MultiArray,
         # torque=Float32MultiArray,
     )
-    @register.actuators(joint_control=Float32MultiArray)
+    @register.actuators(
+        joint_control=Float32MultiArray,
+        cartesian_control=Float32MultiArray,
+    )
     @register.engine_states(
         pos=Float32MultiArray,
         base_pos=Float32MultiArray,
@@ -94,6 +94,15 @@ class Quadruped(Object):
             dtype="float32",
             low=go1_config.RL_LOWER_ANGLE_JOINT.tolist(),
             high=go1_config.RL_UPPER_ANGLE_JOINT.tolist(),
+        )
+
+        # TODO: fix correct limits
+        spec.actuators.cartesian_control.rate = rate
+        spec.actuators.cartesian_control.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=go1_config.NOMINAL_FOOT_POS_LEG_FRAME.tolist(),
+            high=go1_config.NOMINAL_FOOT_POS_LEG_FRAME.tolist(),
         )
 
         # Set model_state properties: (space_converters)
@@ -250,7 +259,7 @@ class Quadruped(Object):
             "JointController",
             "joint_control",
             rate=spec.actuators.joint_control.rate,
-            process=2,
+            process=eagerx.process.BRIDGE,
             joints=spec.config.joint_names,
             mode=spec.config.control_mode,
             vel_target=np.zeros(len(go1_config.JOINT_NAMES)).tolist(),
@@ -258,12 +267,32 @@ class Quadruped(Object):
             vel_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
         )
 
+        cartesian_control = EngineNode.make(
+            "CartesiandPDController",
+            "cartesian_control",
+            rate=spec.actuators.joint_control.rate,
+            process=eagerx.process.BRIDGE,
+            joints=spec.config.joint_names,
+            vel_target=np.zeros(len(go1_config.JOINT_NAMES)).tolist(),
+            pos_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
+            vel_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
+        )
+
         # Connect all engine nodes
-        graph.add([pos_sensor, joint_control, vel_sensor, base_orientation])
+        graph.add(
+            [
+                pos_sensor,
+                vel_sensor,
+                base_orientation,
+                joint_control,
+                cartesian_control,
+            ]
+        )
         graph.connect(source=pos_sensor.outputs.obs, sensor="pos")
         graph.connect(source=vel_sensor.outputs.obs, sensor="vel")
         graph.connect(source=base_orientation.outputs.obs, sensor="base_orientation")
         graph.connect(actuator="joint_control", target=joint_control.inputs.action)
+        graph.connect(actuator="cartesian_control", target=cartesian_control.inputs.cartesian_pos)
 
         # Check graph validity (commented out)
         # graph.is_valid(plot=True)

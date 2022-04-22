@@ -25,7 +25,7 @@ def test_eagerx(skip=True):
     robot = eagerx.Object.make(
         "Quadruped",
         "quadruped",
-        actuators=["joint_control"],
+        actuators=["cartesian_control"],
         rate=5.0,
         control_mode="position_control",
         self_collision=True,
@@ -34,7 +34,8 @@ def test_eagerx(skip=True):
     graph.add(robot)
 
     # Connect the nodes
-    graph.connect(action="joints", target=robot.actuators.joint_control)
+    # graph.connect(action="joints", target=robot.actuators.joint_control)
+    graph.connect(action="cartesian_pos", target=robot.actuators.cartesian_control)
     graph.connect(observation="position", source=robot.sensors.pos)
 
     # Show in the gui
