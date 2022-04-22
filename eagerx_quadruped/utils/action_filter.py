@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright 2020 The Google Research Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,7 +41,7 @@ ACTION_FILTER_LOW_CUT = 0.0
 ACTION_FILTER_HIGH_CUT = 4.0
 
 
-class ActionFilter(object):
+class ActionFilter:
     """Implements a generic lowpass or bandpass action filter."""
 
     def __init__(self, a, b, order, num_joints, ftype="lowpass"):
@@ -185,7 +184,7 @@ class ActionFilterButter(ActionFilter):
             b_coeffs.append(b)
             a_coeffs.append(a)
 
-        super(ActionFilterButter, self).__init__(a_coeffs, b_coeffs, order, num_joints, self.ftype)
+        super().__init__(a_coeffs, b_coeffs, order, num_joints, self.ftype)
 
     def butter_filter(self, lowcut, highcut, fs, order=5):
         """Returns the coefficients of a butterworth filter.
@@ -240,4 +239,4 @@ class ActionFilterExp(ActionFilter):
         order = 1
         self.ftype = "lowpass"
 
-        super(ActionFilterExp, self).__init__(a_coeffs, b_coeffs, order, num_joints, self.ftype)
+        super().__init__(a_coeffs, b_coeffs, order, num_joints, self.ftype)

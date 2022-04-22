@@ -1,10 +1,8 @@
-from typing import List, Optional
+from typing import List
 
 import eagerx.core.register as register
-import numpy as np
 from eagerx.core.entities import EngineState
 from eagerx.core.specs import EngineStateSpec
-from scipy.spatial.transform import Rotation
 
 
 class JointState(EngineState):

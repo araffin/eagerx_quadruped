@@ -1,6 +1,7 @@
 import os
 from typing import List, Optional
 
+import eagerx
 import eagerx.core.register as register
 import numpy as np
 from eagerx import EngineNode, EngineState, Object, SpaceConverter
@@ -20,7 +21,12 @@ class Quadruped(Object):
     entity_id = "Quadruped"
 
     @staticmethod
-    @register.sensors(pos=Float32MultiArray)
+    @register.sensors(
+        pos=Float32MultiArray,
+        vel=Float32MultiArray,
+        base_orientation=Float32MultiArray,
+        # torque=Float32MultiArray,
+    )
     @register.actuators(joint_control=Float32MultiArray)
     @register.engine_states(
         pos=Float32MultiArray,
@@ -31,23 +37,21 @@ class Quadruped(Object):
     )
     @register.config(
         joint_names=None,
-        gripper_names=None,
         fixed_base=False,
         self_collision=True,
         base_pos=None,
-        base_or=None,
+        base_orientation=None,
         control_mode=None,
     )
     def agnostic(spec: ObjectSpec, rate):
         """This methods builds the agnostic definition for a vx300s manipulator.
 
         Registered (agnostic) config parameters (should probably be set in the spec() function):
-        - joint_names: List of arm joints.
-        - gripper_names: List of gripper joints.
+        - joint_names: List of quadruped joints.
         - fixed_base: Force the base of the loaded object to be static.
         - self_collision: Enable self collisions.
         - base_pos: Base position of the object [x, y, z].
-        - base_or: Base orientation of the object in quaternion [x, y, z, w].
+        - base_orientation: Base orientation of the object in quaternion [x, y, z, w].
         - control_mode: Control mode for the arm joints.
                         Available: `position_control`, `velocity_control`, `pd_control`, and `torque_control`.
 
@@ -64,6 +68,23 @@ class Quadruped(Object):
             dtype="float32",
             low=go1_config.RL_LOWER_ANGLE_JOINT.tolist(),
             high=go1_config.RL_UPPER_ANGLE_JOINT.tolist(),
+        )
+
+        spec.sensors.vel.rate = rate
+        spec.sensors.vel.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=(-go1_config.VELOCITY_LIMITS).tolist(),
+            high=go1_config.VELOCITY_LIMITS.tolist(),
+        )
+
+        # TODO: specify correct limits
+        spec.sensors.base_orientation.rate = rate
+        spec.sensors.base_orientation.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=list(go1_config.INIT_ORIENTATION),
+            high=list(go1_config.INIT_ORIENTATION),
         )
 
         # Set actuator properties: (space_converters, rate, etc...)
@@ -121,7 +142,7 @@ class Quadruped(Object):
         states: Optional[List[str]] = None,
         rate: float = 30.0,
         base_pos: Optional[List[int]] = None,
-        base_or: Optional[List[int]] = None,
+        base_orientation: Optional[List[int]] = None,
         self_collision: bool = False,
         fixed_base: bool = True,
         control_mode: str = "position_control",
@@ -135,7 +156,7 @@ class Quadruped(Object):
         :param states: A list of selected states. Must be a subset of the registered actuators.
         :param rate: The default rate at which all sensors and actuators run. Can be modified via the spec API.
         :param base_pos: Base position of the object [x, y, z].
-        :param base_or: Base orientation of the object in quaternion [x, y, z, w].
+        :param base_orientation: Base orientation of the object in quaternion [x, y, z, w].
         :param self_collision: Enable self collisions.
         :param fixed_base: Force the base of the loaded object to be static.
         :param control_mode: Control mode for the arm joints. Available: `position_control`, `velocity_control`, `pd_control`, and `torque_control`.
@@ -147,14 +168,16 @@ class Quadruped(Object):
         # Modify default agnostic params
         # Only allow changes to the agnostic params (rates, windows, (space)converters, etc...
         spec.config.name = name
-        spec.config.sensors = sensors if sensors else ["pos"]
+        spec.config.sensors = sensors if sensors else ["pos", "vel", "base_orientation"]
         spec.config.actuators = actuators if actuators else ["joint_control"]
-        spec.config.states = states if states else ["pos"]
+        spec.config.states = (
+            states if states else ["pos", "base_pos", "base_orientation", "base_velocity", "base_angular_velocity"]
+        )
 
         # Add registered agnostic params
         spec.config.joint_names = list(go1_config.JOINT_NAMES)
         spec.config.base_pos = base_pos if base_pos else go1_config.INIT_POSITION
-        spec.config.base_or = base_or if base_or else [0, 0, 0, 1]
+        spec.config.base_orientation = base_orientation if base_orientation else [0, 0, 0, 1]
         spec.config.self_collision = self_collision
         spec.config.fixed_base = fixed_base
         spec.config.control_mode = control_mode
@@ -174,7 +197,7 @@ class Quadruped(Object):
         urdf_file = os.path.join(go1_config.URDF_ROOT, go1_config.URDF_FILENAME)
         spec.PybulletBridge.urdf = urdf_file
         spec.PybulletBridge.basePosition = spec.config.base_pos
-        spec.PybulletBridge.baseOrientation = spec.config.base_or
+        spec.PybulletBridge.baseOrientation = spec.config.base_orientation
         spec.PybulletBridge.fixed_base = spec.config.fixed_base
         spec.PybulletBridge.self_collision = spec.config.self_collision
 
@@ -188,8 +211,37 @@ class Quadruped(Object):
 
         # Create sensor engine nodes
         # Rate=None, but we will connect them to sensors (thus will use the rate set in the agnostic specification)
+        rate = spec.sensors.pos.rate
         pos_sensor = EngineNode.make(
-            "JointSensor", "pos_sensor", rate=spec.sensors.pos.rate, process=2, joints=spec.config.joint_names, mode="position"
+            "JointSensor",
+            "pos_sensor",
+            rate=rate,
+            process=eagerx.process.BRIDGE,
+            joints=spec.config.joint_names,
+            mode="position",
+        )
+
+        vel_sensor = EngineNode.make(
+            "JointSensor",
+            "vel_sensor",
+            rate=rate,
+            process=eagerx.process.BRIDGE,
+            joints=spec.config.joint_names,
+            mode="velocity",
+        )
+
+        # torque_sensor = EngineNode.make(
+        #     "JointSensor", "torque_sensor", rate=rate, process=eagerx.process.BRIDGE, joints=spec.config.joint_names, mode="applied_torque",
+        # )
+
+        # TODO: convert to euler (currently quaternion)
+        base_orientation = EngineNode.make(
+            "LinkSensor",
+            "base_orientation_sensor",
+            rate=rate,
+            process=eagerx.process.BRIDGE,
+            links=None,
+            mode="orientation",
         )
 
         # Create actuator engine nodes
@@ -207,8 +259,10 @@ class Quadruped(Object):
         )
 
         # Connect all engine nodes
-        graph.add([pos_sensor, joint_control])
+        graph.add([pos_sensor, joint_control, vel_sensor, base_orientation])
         graph.connect(source=pos_sensor.outputs.obs, sensor="pos")
+        graph.connect(source=vel_sensor.outputs.obs, sensor="vel")
+        graph.connect(source=base_orientation.outputs.obs, sensor="base_orientation")
         graph.connect(actuator="joint_control", target=joint_control.inputs.action)
 
         # Check graph validity (commented out)

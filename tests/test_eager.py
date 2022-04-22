@@ -9,7 +9,7 @@ from eagerx.core.env import EagerxEnv
 from eagerx.core.graph import Graph
 
 import eagerx_quadruped.object  # noqa: F401
-import eagerx_quadruped.robots.go1.configs_go1 as go1_config
+import eagerx_quadruped.robots.go1.configs_go1 as go1_config  # noqa: F401
 
 
 def test_eagerx(skip=True):
@@ -25,9 +25,7 @@ def test_eagerx(skip=True):
     robot = eagerx.Object.make(
         "Quadruped",
         "quadruped",
-        sensors=["pos"],
         actuators=["joint_control"],
-        states=["pos"],
         rate=5.0,
         control_mode="position_control",
         self_collision=True,
@@ -45,7 +43,7 @@ def test_eagerx(skip=True):
     # Define bridgesif
     bridge = eagerx.Bridge.make(
         "PybulletBridge",
-        rate=20.0,
+        rate=100.0,
         gui=True,
         egl=True,
         is_reactive=True,
@@ -76,7 +74,7 @@ def test_eagerx(skip=True):
 
     # Evaluate
     try:
-        for eps in range(2):
+        for eps in range(5):
             print(f"Episode {eps}")
             _, done = env.reset(), False
             while not done:

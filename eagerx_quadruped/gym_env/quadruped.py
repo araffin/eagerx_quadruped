@@ -8,7 +8,7 @@ import numpy as np
 from eagerx_quadruped.gym_env.quadruped_motor import QuadrupedMotorModel
 
 
-class Quadruped(object):
+class Quadruped:
     """The quadruped class to simulate Unitree GO1."""
 
     def __init__(

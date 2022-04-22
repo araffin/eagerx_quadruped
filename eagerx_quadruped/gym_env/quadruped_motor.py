@@ -10,7 +10,7 @@ NUM_LEGS = 4
 CONTROL_MODES = ["TORQUE", "PD"]
 
 
-class QuadrupedMotorModel(object):
+class QuadrupedMotorModel:
     """A simple motor model for GO1.
 
     When in POSITION mode, the torque is calculated according to the difference
