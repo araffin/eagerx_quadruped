@@ -4,7 +4,7 @@ setup(
     name="eagerx_quadruped",
     packages=[package for package in find_packages() if package.startswith("eagerx_quadruped")],
     # package_data={"sb3_contrib": ["py.typed", "version.txt"]},
-    install_requires=["eagerx>=0.1.13"],
+    install_requires=["eagerx>=0.1.17", "eagerx-pybullet>=0.1.7"],
     extras_require={
         "tests": [
             # Run tests and coverage
@@ -29,7 +29,7 @@ setup(
     license="MIT",
     long_description="",
     long_description_content_type="text/markdown",
-    version="0.0.1",
+    version="0.1.2",
     python_requires=">=3.7",
     # PyPI package information.
     classifiers=[

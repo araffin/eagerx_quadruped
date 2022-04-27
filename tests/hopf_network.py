@@ -225,7 +225,7 @@ if __name__ == "__main__":
         rate=rate,
         gui=True,
         egl=True,
-        is_reactive=True,
+        sync=True,
         real_time_factor=0,
         process=eagerx.process.ENVIRONMENT,
     )
