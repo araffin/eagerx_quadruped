@@ -10,7 +10,7 @@ from eagerx.core.specs import ObjectSpec
 from eagerx_pybullet.bridge import PybulletBridge
 from std_msgs.msg import Float32MultiArray
 
-import eagerx_quadruped.nodes  # noqa: F401
+import eagerx_quadruped.cartesian_control  # noqa: F401
 import eagerx_quadruped.robots.go1.configs_go1 as go1_config
 
 
@@ -22,11 +22,12 @@ class Quadruped(Object):
         pos=Float32MultiArray,
         vel=Float32MultiArray,
         base_orientation=Float32MultiArray,
-        # torque=Float32MultiArray,
+        base_pos=Float32MultiArray,
+        base_vel=Float32MultiArray,
+        reaction_force=Float32MultiArray,
     )
     @register.actuators(
         joint_control=Float32MultiArray,
-        cartesian_control=Float32MultiArray,
     )
     @register.engine_states(
         pos=Float32MultiArray,
@@ -44,7 +45,7 @@ class Quadruped(Object):
         control_mode=None,
     )
     def agnostic(spec: ObjectSpec, rate):
-        """This methods builds the agnostic definition for a vx300s manipulator.
+        """This methods builds the agnostic definition for a quadruped.
 
         Registered (agnostic) config parameters (should probably be set in the spec() function):
         - joint_names: List of quadruped joints.
@@ -87,6 +88,32 @@ class Quadruped(Object):
             high=list(go1_config.INIT_ORIENTATION),
         )
 
+        # TODO: BEGIN
+        spec.sensors.base_pos.rate = rate
+        spec.sensors.base_pos.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=[-10.0, -10.0, 0.0],
+            high=[10.0, 10.0, 0.5],
+        )
+
+        spec.sensors.base_vel.rate = rate
+        spec.sensors.base_vel.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=[-1.0, -1.0, -0.2],
+            high=[1.0, 1.0, 0.2],
+        )
+
+        spec.sensors.reaction_force.rate = rate
+        spec.sensors.reaction_force.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=list(go1_config.INIT_ORIENTATION),
+            high=list(go1_config.INIT_ORIENTATION),
+        )
+        # TODO: END
+
         # Set actuator properties: (space_converters, rate, etc...)
         spec.actuators.joint_control.rate = rate
         spec.actuators.joint_control.space_converter = SpaceConverter.make(
@@ -94,15 +121,6 @@ class Quadruped(Object):
             dtype="float32",
             low=go1_config.RL_LOWER_ANGLE_JOINT.tolist(),
             high=go1_config.RL_UPPER_ANGLE_JOINT.tolist(),
-        )
-
-        # TODO: fix correct limits
-        spec.actuators.cartesian_control.rate = rate
-        spec.actuators.cartesian_control.space_converter = SpaceConverter.make(
-            "Space_Float32MultiArray",
-            dtype="float32",
-            low=go1_config.NOMINAL_FOOT_POS_LEG_FRAME.tolist(),
-            high=go1_config.NOMINAL_FOOT_POS_LEG_FRAME.tolist(),
         )
 
         # Set model_state properties: (space_converters)
@@ -171,9 +189,6 @@ class Quadruped(Object):
         :param control_mode: Control mode for the arm joints. Available: `position_control`, `velocity_control`, `pd_control`, and `torque_control`.
         :return: ObjectSpec
         """
-        # Performs all the steps to fill-in the params with registered info about all functions.
-        Quadruped.initialize_spec(spec)
-
         # Modify default agnostic params
         # Only allow changes to the agnostic params (rates, windows, (space)converters, etc...
         spec.config.name = name
@@ -266,18 +281,6 @@ class Quadruped(Object):
             pos_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
             vel_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
         )
-
-        cartesian_control = EngineNode.make(
-            "CartesiandPDController",
-            "cartesian_control",
-            rate=spec.actuators.joint_control.rate,
-            process=eagerx.process.BRIDGE,
-            joints=spec.config.joint_names,
-            vel_target=np.zeros(len(go1_config.JOINT_NAMES)).tolist(),
-            pos_gain=(1.0 * np.ones(len(go1_config.JOINT_NAMES))).tolist(),
-            vel_gain=(1.0 * np.ones(len(go1_config.JOINT_NAMES))).tolist(),
-        )
-
         # Connect all engine nodes
         graph.add(
             [
@@ -285,14 +288,12 @@ class Quadruped(Object):
                 vel_sensor,
                 base_orientation,
                 joint_control,
-                cartesian_control,
             ]
         )
         graph.connect(source=pos_sensor.outputs.obs, sensor="pos")
         graph.connect(source=vel_sensor.outputs.obs, sensor="vel")
         graph.connect(source=base_orientation.outputs.obs, sensor="base_orientation")
         graph.connect(actuator="joint_control", target=joint_control.inputs.action)
-        graph.connect(actuator="cartesian_control", target=cartesian_control.inputs.cartesian_pos)
 
         # Check graph validity (commented out)
         # graph.is_valid(plot=True)
