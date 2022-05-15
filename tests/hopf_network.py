@@ -6,12 +6,12 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
 
 """
 
-# Registers PybulletBridge
+# Registers PybulletEngine
 import eagerx
 import eagerx_pybullet  # noqa: F401
 import numpy as np
 
-# Registers PybulletBridge
+# Registers PybulletEngine
 import eagerx_quadruped.object  # noqa: F401
 import eagerx_quadruped.cartesian_control  # noqa: F401
 import eagerx_quadruped.cpg_gait  # noqa: F401
@@ -73,9 +73,9 @@ if __name__ == "__main__":
     # Show in the gui
     graph.gui()
 
-    # Define bridge
-    bridge = eagerx.Bridge.make(
-        "PybulletBridge",
+    # Define engine
+    engine = eagerx.Engine.make(
+        "PybulletEngine",
         rate=sim_rate,
         gui=True,
         egl=True,
@@ -95,7 +95,7 @@ if __name__ == "__main__":
         return obs, rwd, done, info
 
     # Initialize Environment
-    env = eagerx.EagerxEnv(name="rx", rate=20, graph=graph, bridge=bridge, step_fn=step_fn)
+    env = eagerx.EagerxEnv(name="rx", rate=20, graph=graph, engine=engine, step_fn=step_fn)
 
     while True:
         obs, done = env.reset(), False

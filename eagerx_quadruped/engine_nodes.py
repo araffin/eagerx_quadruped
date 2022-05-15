@@ -20,7 +20,7 @@ class CartesiandPDController(EngineNode):
         name: str,
         rate: float,
         joints: List[str],
-        process: Optional[int] = p.BRIDGE,
+        process: Optional[int] = p.ENGINE,
         color: Optional[str] = "green",
         vel_gain: Optional[List[float]] = None,
         vel_target: Optional[List[float]] = None,
@@ -63,8 +63,8 @@ class CartesiandPDController(EngineNode):
     def initialize(self, joints, mode, vel_target, pos_gain, vel_gain, max_force):
         # We will probably use self.simulator[self.obj_name] in callback & reset.
         self.obj_name = self.config["name"]
-        assert self.process == p.BRIDGE, (
-            "Simulation node requires a reference to the simulator," " hence it must be launched in the Bridge process"
+        assert self.process == p.ENGINE, (
+            "Simulation node requires a reference to the simulator," " hence it must be launched in the Engine process"
         )
         flag = self.obj_name in self.simulator["robots"]
         assert flag, f'Simulator object "{self.simulator}" is not compatible with this simulation node.'

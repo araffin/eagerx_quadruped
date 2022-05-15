@@ -7,7 +7,7 @@ import numpy as np
 from eagerx import EngineNode, EngineState, Object, SpaceConverter
 from eagerx.core.graph_engine import EngineGraph
 from eagerx.core.specs import ObjectSpec
-from eagerx_pybullet.bridge import PybulletBridge
+from eagerx_pybullet.engine import PybulletEngine
 from std_msgs.msg import Float32MultiArray
 
 import eagerx_quadruped.cartesian_control  # noqa: F401
@@ -210,28 +210,28 @@ class Quadruped(Object):
         Quadruped.agnostic(spec, rate)
 
     @staticmethod
-    # This decorator pre-initializes bridge implementation with default object_params
-    @register.bridge(entity_id, PybulletBridge)
-    def pybullet_bridge(spec: ObjectSpec, graph: EngineGraph):
+    # This decorator pre-initializes engine implementation with default object_params
+    @register.engine(entity_id, PybulletEngine)
+    def pybullet_engine(spec: ObjectSpec, graph: EngineGraph):
         """Engine-specific implementation (Pybullet) of the object."""
-        # Import any object specific entities for this bridge
+        # Import any object specific entities for this engine
         import eagerx_pybullet  # noqa
 
-        # Set object arguments (as registered per register.bridge_params(..) above the bridge.add_object(...) method.
+        # Set object arguments (as registered per register.engine_params(..) above the engine.add_object(...) method.
         urdf_file = os.path.join(go1_config.URDF_ROOT, go1_config.URDF_FILENAME)
-        spec.PybulletBridge.urdf = urdf_file
-        spec.PybulletBridge.basePosition = spec.config.base_pos
-        spec.PybulletBridge.baseOrientation = spec.config.base_orientation
-        spec.PybulletBridge.fixed_base = spec.config.fixed_base
-        spec.PybulletBridge.self_collision = spec.config.self_collision
+        spec.PybulletEngine.urdf = urdf_file
+        spec.PybulletEngine.basePosition = spec.config.base_pos
+        spec.PybulletEngine.baseOrientation = spec.config.base_orientation
+        spec.PybulletEngine.fixed_base = spec.config.fixed_base
+        spec.PybulletEngine.self_collision = spec.config.self_collision
 
         # Create engine_states (no agnostic states defined in this case)
-        spec.PybulletBridge.states.pos = EngineState.make("JointState", joints=spec.config.joint_names, mode="position")
+        spec.PybulletEngine.states.pos = EngineState.make("JointState", joints=spec.config.joint_names, mode="position")
 
-        spec.PybulletBridge.states.base_pos = EngineState.make("LinkState", mode="position")
-        spec.PybulletBridge.states.base_orientation = EngineState.make("LinkState", mode="orientation")
-        spec.PybulletBridge.states.base_velocity = EngineState.make("LinkState", mode="velocity")
-        spec.PybulletBridge.states.base_angular_velocity = EngineState.make("LinkState", mode="angular_vel")
+        spec.PybulletEngine.states.base_pos = EngineState.make("LinkState", mode="position")
+        spec.PybulletEngine.states.base_orientation = EngineState.make("LinkState", mode="orientation")
+        spec.PybulletEngine.states.base_velocity = EngineState.make("LinkState", mode="velocity")
+        spec.PybulletEngine.states.base_angular_velocity = EngineState.make("LinkState", mode="angular_vel")
 
         # Create sensor engine nodes
         # Rate=None, but we will connect them to sensors (thus will use the rate set in the agnostic specification)
@@ -240,7 +240,7 @@ class Quadruped(Object):
             "JointSensor",
             "pos_sensor",
             rate=rate,
-            process=eagerx.process.BRIDGE,
+            process=eagerx.process.ENGINE,
             joints=spec.config.joint_names,
             mode="position",
         )
@@ -249,13 +249,13 @@ class Quadruped(Object):
             "JointSensor",
             "vel_sensor",
             rate=rate,
-            process=eagerx.process.BRIDGE,
+            process=eagerx.process.ENGINE,
             joints=spec.config.joint_names,
             mode="velocity",
         )
 
         # torque_sensor = EngineNode.make(
-        #     "JointSensor", "torque_sensor", rate=rate, process=eagerx.process.BRIDGE, joints=spec.config.joint_names, mode="applied_torque",
+        #     "JointSensor", "torque_sensor", rate=rate, process=eagerx.process.ENGINE, joints=spec.config.joint_names, mode="applied_torque",
         # )
 
         # TODO: convert to euler (currently quaternion)
@@ -263,7 +263,7 @@ class Quadruped(Object):
             "LinkSensor",
             "base_orientation_sensor",
             rate=rate,
-            process=eagerx.process.BRIDGE,
+            process=eagerx.process.ENGINE,
             links=None,
             mode="orientation",
         )
@@ -274,7 +274,7 @@ class Quadruped(Object):
             "JointController",
             "joint_control",
             rate=spec.actuators.joint_control.rate,
-            process=eagerx.process.BRIDGE,
+            process=eagerx.process.ENGINE,
             joints=spec.config.joint_names,
             mode=spec.config.control_mode,
             vel_target=np.zeros(len(go1_config.JOINT_NAMES)).tolist(),

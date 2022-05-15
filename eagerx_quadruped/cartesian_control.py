@@ -52,9 +52,9 @@ class CartesiandPDController(eagerx.Node):
         desired_joint_angles = np.zeros(len(self.joints))
         # call inverse kinematics to get corresponding joint angles
         for leg_idx in range(go1_config.NUM_LEGS):
-            xyz_desired = action[3 * leg_idx: 3 * (leg_idx + 1)]
+            xyz_desired = action[3 * leg_idx : 3 * (leg_idx + 1)]
             leg_q = self.compute_inverse_kinematics(leg_idx, xyz_desired)
-            desired_joint_angles[3 * leg_idx: 3 * (leg_idx + 1)] = leg_q
+            desired_joint_angles[3 * leg_idx : 3 * (leg_idx + 1)] = leg_q
 
         # Send desired joint positions.
         return dict(joint_pos=Float32MultiArray(data=desired_joint_angles))
