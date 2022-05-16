@@ -13,6 +13,8 @@ import numpy as np
 import pybullet
 from eagerx.wrappers import Flatten
 from sb3_contrib import TQC
+from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.evaluation import evaluate_policy
 
 import eagerx_quadruped.cartesian_control  # noqa: F401
 import eagerx_quadruped.cpg_gait  # noqa: F401
@@ -147,6 +149,11 @@ if __name__ == "__main__":
     # Initialize Environment
     env = eagerx.EagerxEnv(name="rx", rate=20, graph=graph, engine=engine, step_fn=step_fn)
     env = Flatten(env)
+
+    # model = TQC.load("logs/rl_model_10000_steps.zip")
+    # mean_reward, std = evaluate_policy(model, env, n_eval_episodes=5)
+    # print(f"Mean reward = {mean_reward:.2f} +/- {std}")
+
     # env = check_env(env)
     model = TQC(
         "MlpPolicy",
@@ -164,8 +171,11 @@ if __name__ == "__main__":
         policy_kwargs=dict(n_critics=1),
     )
 
+    # Save a checkpoint every 10000 steps
+    checkpoint_callback = CheckpointCallback(save_freq=10000, save_path="./logs/", name_prefix="rl_model")
+
     try:
-        model.learn(1_000_000)
+        model.learn(1_000_000, callback=checkpoint_callback)
     except KeyboardInterrupt:
         model.save("tqc_cpg")
 

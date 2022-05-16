@@ -58,6 +58,7 @@ class CpgGait(eagerx.Node):
         spec.config.update(robot_height=robot_height, des_step_len=des_step_len)
 
         # TODO Define action limits
+        # TODO: limit to 4 outputs
         spec.inputs.offset.space_converter = eagerx.SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
@@ -122,7 +123,6 @@ class CpgGait(eagerx.Node):
         action = np.zeros((12,))
         for i in range(self.n_legs):
             xyz_desired = np.array([xs[i], self.side_sign[i] * self.foot_y, zs[i]])
-            # Set tau for legi in action vector
             action[3 * i : 3 * i + 3] = xyz_desired
 
         # Add offset
