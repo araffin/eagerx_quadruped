@@ -34,7 +34,6 @@ import eagerx_quadruped.robots.go1.configs_go1 as go1_config  # noqa: F401
 # todo: Reduce dimension of force_torque sensor (gives [Fx, Fy, Fz, Mx, My, Mz] PER joint --> 6 * 12=72 dimensions).
 # todo: Tune sensor rates to the lowest possible.
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--folder", help="Log folder", type=str, default="logs")
@@ -154,9 +153,9 @@ if __name__ == "__main__":
         # Go forward
         # desired_velocity = np.array([1.0, 0.0])
         # Go on the side, in circle
-        desired_velocity = np.array([0.1, 0.4])
+        desired_velocity = np.array([0.2, 0.5])
         alive_bonus = 1.0
-        # current_vel = (obs["base_pos"][0] - prev_obs["base_pos"][0]) * env_rate
+
         reward = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
         # reward = alive_bonus - np.linalg.norm(desired_velocity - current_vel)
         # print(obs["base_vel"][0][:2])
@@ -169,8 +168,8 @@ if __name__ == "__main__":
 
         # Determine done flag
         done = timeout or has_fallen
-        # Set info:
-        info = {"TimeLimit.truncated": timeout}
+        # Set info about episode truncation
+        info = {"TimeLimit.truncated": timeout and not has_fallen}
         return obs, reward, done, info
 
     # Initialize Environment
@@ -193,8 +192,8 @@ if __name__ == "__main__":
         gamma=0.98,
         buffer_size=300000,
         learning_starts=0,
-        # use_sde=True,
-        # use_sde_at_warmup=True,
+        use_sde=True,
+        use_sde_at_warmup=True,
         train_freq=8,
         gradient_steps=8,
         verbose=1,
@@ -202,7 +201,7 @@ if __name__ == "__main__":
     )
 
     # Save a checkpoint every 10000 steps
-    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path="./logs/", name_prefix="rl_model")
+    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=f"./{args.folder}/", name_prefix="rl_model")
 
     try:
         model.learn(1_000_000, callback=checkpoint_callback)
