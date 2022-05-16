@@ -1,6 +1,7 @@
 from typing import Optional
-import numpy as np
+
 import eagerx
+import numpy as np
 from eagerx import register
 from eagerx.utils.utils import Msg
 from std_msgs.msg import Float32MultiArray

@@ -10,13 +10,14 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
 import eagerx
 import eagerx_pybullet  # noqa: F401
 import numpy as np
+import pybullet
+
+import eagerx_quadruped.cartesian_control  # noqa: F401
+import eagerx_quadruped.cpg_gait  # noqa: F401
 
 # Registers PybulletEngine
 import eagerx_quadruped.object  # noqa: F401
-import eagerx_quadruped.cartesian_control  # noqa: F401
-import eagerx_quadruped.cpg_gait  # noqa: F401
 import eagerx_quadruped.robots.go1.configs_go1 as go1_config  # noqa: F401
-
 
 # TODO: Use scipy to accurately integrate cpg
 # todo: Specify realistic spaces for cpg.inputs.offset, cpg.outputs.xs_zs
@@ -26,10 +27,10 @@ import eagerx_quadruped.robots.go1.configs_go1 as go1_config  # noqa: F401
 
 if __name__ == "__main__":
 
-    T = 10.0
+    max_time = 5.0  # in s
     env_rate = 20
     cpg_rate = 200
-    cc_rate = 200
+    cartesian_rate = 200
     quad_rate = 200
     sim_rate = 200
     # set_random_seed(1)
@@ -61,8 +62,8 @@ if __name__ == "__main__":
     graph.add(robot)
 
     # Create cartesian control node
-    cc = eagerx.Node.make("CartesiandPDController", "cartesian_control", rate=cc_rate)
-    graph.add(cc)
+    cartesian_control = eagerx.Node.make("CartesiandPDController", "cartesian_control", rate=cartesian_rate)
+    graph.add(cartesian_control)
 
     # Create cpg node
     gait = "TROT"
@@ -73,13 +74,20 @@ if __name__ == "__main__":
         "PACE": [20 * np.pi, 20 * np.pi],
         "BOUND": [10 * np.pi, 20 * np.pi],
     }[gait]
-    cpg = eagerx.Node.make("CpgGait", "cpg", rate=cpg_rate, gait=gait, omega_swing=omega_swing, omega_stance=omega_stance)
+    cpg = eagerx.Node.make(
+        "CpgGait",
+        "cpg",
+        rate=cpg_rate,
+        gait=gait,
+        omega_swing=omega_swing,
+        omega_stance=omega_stance,
+    )
     graph.add(cpg)
 
     # Connect the nodes
     graph.connect(action="offset", target=cpg.inputs.offset)
-    graph.connect(source=cpg.outputs.cartesian_pos, target=cc.inputs.cartesian_pos)
-    graph.connect(source=cc.outputs.joint_pos, target=robot.actuators.joint_control)
+    graph.connect(source=cpg.outputs.cartesian_pos, target=cartesian_control.inputs.cartesian_pos)
+    graph.connect(source=cartesian_control.outputs.joint_pos, target=robot.actuators.joint_control)
     graph.connect(observation="position", source=robot.sensors.pos)
     graph.connect(observation="velocity", source=robot.sensors.vel)
     graph.connect(observation="base_pos", source=robot.sensors.base_pos)
@@ -97,7 +105,7 @@ if __name__ == "__main__":
     graph.connect(observation="force_torque", source=robot.sensors.force_torque)
 
     # Show in the gui
-    graph.gui()
+    # graph.gui()
 
     # Define engine
     engine = eagerx.Engine.make(
@@ -113,11 +121,23 @@ if __name__ == "__main__":
     # Define step function
     def step_fn(prev_obs, obs, action, steps):
         # Calculate reward
-        rwd = 0
+        # Go forward
+        desired_velocity = np.array([1.0, 0.0])
+        # Go on the side, in circle
+        desired_velocity = np.array([1.0, 1.0])
+        alive_bonus = 1.0
+        rwd = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
+
+        # Convert Quaternion to Euler
+        roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][0])
+        # print(list(map(np.rad2deg, (roll, pitch, yaw))))
+        has_fallen = abs(np.rad2deg(roll)) > 40 or abs(np.rad2deg(pitch)) > 50
+        timeout = steps > int(max_time * env_rate)
+
         # Determine done flag
-        done = steps > int(T * env_rate)
+        done = timeout or has_fallen
         # Set info:
-        info = dict()
+        info = {"TimeLimit.truncated": timeout}
         return obs, rwd, done, info
 
     # Initialize Environment

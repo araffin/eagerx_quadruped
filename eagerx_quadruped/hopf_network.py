@@ -1,5 +1,8 @@
-import numpy as np
 from functools import partial
+
+import numpy as np
+
+# from numba import jit
 
 
 # Runge Kutta taking the EOM as an argument
@@ -11,6 +14,7 @@ def runge_kutta4(x, ode, dt):
     return x + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
 
 
+# @jit(nopython=True)
 def ode(omega_swing, omega_stance, mu, alpha, couple, coupling_strength, PHI, x):
     r = x[:4]
     theta = x[4:]
