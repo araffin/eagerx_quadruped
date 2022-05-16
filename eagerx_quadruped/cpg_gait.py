@@ -61,8 +61,8 @@ class CpgGait(eagerx.Node):
         spec.inputs.offset.space_converter = eagerx.SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
-            low=[0] * 12,
-            high=[0] * 12,
+            low=[-0.001] * 12,
+            high=[0.001] * 12,
         )
 
         # Experimentally obtained. Above offset should be taken into account --> include y?

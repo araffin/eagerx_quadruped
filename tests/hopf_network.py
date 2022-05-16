@@ -11,6 +11,8 @@ import eagerx
 import eagerx_pybullet  # noqa: F401
 import numpy as np
 import pybullet
+from eagerx.wrappers import Flatten
+from sb3_contrib import TQC
 
 import eagerx_quadruped.cartesian_control  # noqa: F401
 import eagerx_quadruped.cpg_gait  # noqa: F401
@@ -18,6 +20,9 @@ import eagerx_quadruped.cpg_gait  # noqa: F401
 # Registers PybulletEngine
 import eagerx_quadruped.object  # noqa: F401
 import eagerx_quadruped.robots.go1.configs_go1 as go1_config  # noqa: F401
+
+# from stable_baselines3.common.env_checker import check_env
+
 
 # TODO: Use scipy to accurately integrate cpg
 # todo: Specify realistic spaces for cpg.inputs.offset, cpg.outputs.xs_zs
@@ -27,7 +32,7 @@ import eagerx_quadruped.robots.go1.configs_go1 as go1_config  # noqa: F401
 
 if __name__ == "__main__":
 
-    max_time = 5.0  # in s
+    episode_timeout = 10.0  # in s
     env_rate = 20
     cpg_rate = 200
     cartesian_rate = 200
@@ -122,30 +127,51 @@ if __name__ == "__main__":
     def step_fn(prev_obs, obs, action, steps):
         # Calculate reward
         # Go forward
-        desired_velocity = np.array([1.0, 0.0])
+        # desired_velocity = np.array([1.0, 0.0])
         # Go on the side, in circle
-        desired_velocity = np.array([1.0, 1.0])
+        desired_velocity = np.array([0.4, 0.4])
         alive_bonus = 1.0
-        rwd = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
-
+        reward = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
         # Convert Quaternion to Euler
         roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][0])
         # print(list(map(np.rad2deg, (roll, pitch, yaw))))
-        has_fallen = abs(np.rad2deg(roll)) > 40 or abs(np.rad2deg(pitch)) > 50
-        timeout = steps > int(max_time * env_rate)
+        has_fallen = abs(np.rad2deg(roll)) > 40 or abs(np.rad2deg(pitch)) > 40
+        timeout = steps > int(episode_timeout * env_rate)
 
         # Determine done flag
         done = timeout or has_fallen
         # Set info:
         info = {"TimeLimit.truncated": timeout}
-        return obs, rwd, done, info
+        return obs, reward, done, info
 
     # Initialize Environment
     env = eagerx.EagerxEnv(name="rx", rate=20, graph=graph, engine=engine, step_fn=step_fn)
+    env = Flatten(env)
+    # env = check_env(env)
+    model = TQC(
+        "MlpPolicy",
+        env,
+        learning_rate=7e-4,
+        tau=0.02,
+        gamma=0.98,
+        buffer_size=300000,
+        learning_starts=0,
+        use_sde=True,
+        use_sde_at_warmup=True,
+        train_freq=8,
+        gradient_steps=8,
+        verbose=1,
+        policy_kwargs=dict(n_critics=1),
+    )
 
-    while True:
-        obs, done = env.reset(), False
-        while not done:
+    try:
+        model.learn(1_000_000)
+    except KeyboardInterrupt:
+        model.save("tqc_cpg")
 
-            action = np.zeros((12,))
-            _, reward, done, info = env.step(dict(offset=action))
+    # while True:
+    #     obs, done = env.reset(), False
+    #     while not done:
+    #
+    #         action = np.zeros((12,))
+    #         _, reward, done, info = env.step(dict(offset=action))
