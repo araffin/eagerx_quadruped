@@ -58,12 +58,12 @@ class CpgGait(eagerx.Node):
         spec.config.update(robot_height=robot_height, des_step_len=des_step_len)
 
         # TODO Define action limits
-        # TODO: limit to 4 outputs
+        # TODO: limit to 4 outputs instead of 12
         spec.inputs.offset.space_converter = eagerx.SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
-            low=[-0.001] * 12,
-            high=[0.001] * 12,
+            low=[-0.01] * 4,
+            high=[0.01] * 4,
         )
 
         # Experimentally obtained. Above offset should be taken into account --> include y?
@@ -121,10 +121,13 @@ class CpgGait(eagerx.Node):
         unique_xs_zs = np.array([xs[0], zs[0], xs[1], zs[1]], dtype="float32")
 
         action = np.zeros((12,))
+        offset = offset.msgs[-1].data
         for i in range(self.n_legs):
-            xyz_desired = np.array([xs[i], self.side_sign[i] * self.foot_y, zs[i]])
+            xyz_desired = np.array([xs[i], self.side_sign[i] * self.foot_y + offset[i], zs[i]])
             action[3 * i : 3 * i + 3] = xyz_desired
 
         # Add offset
-        action += np.array(offset.msgs[-1].data, dtype="float32")
+        # TODO: clip
+        # action += np.clip(np.array(offset.msgs[-1].data, dtype="float32"), -0.01, 0.01)
+        # action += np.array(offset.msgs[-1].data, dtype="float32")
         return dict(cartesian_pos=Float32MultiArray(data=action), xs_zs=Float32MultiArray(data=unique_xs_zs))

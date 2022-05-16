@@ -118,7 +118,7 @@ if __name__ == "__main__":
     engine = eagerx.Engine.make(
         "PybulletEngine",
         rate=sim_rate,
-        gui=True,
+        gui=False,
         egl=True,
         sync=True,
         real_time_factor=0,
@@ -131,9 +131,11 @@ if __name__ == "__main__":
         # Go forward
         # desired_velocity = np.array([1.0, 0.0])
         # Go on the side, in circle
-        desired_velocity = np.array([0.4, 0.4])
+        desired_velocity = np.array([0.3, 0.4])
         alive_bonus = 1.0
         reward = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
+        # print(obs["base_vel"][0][:2])
+        # print(reward)
         # Convert Quaternion to Euler
         roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][0])
         # print(list(map(np.rad2deg, (roll, pitch, yaw))))
@@ -150,9 +152,10 @@ if __name__ == "__main__":
     env = eagerx.EagerxEnv(name="rx", rate=20, graph=graph, engine=engine, step_fn=step_fn)
     env = Flatten(env)
 
-    # model = TQC.load("logs/rl_model_10000_steps.zip")
+    # model = TQC.load("logs/rl_model_30000_steps.zip")
     # mean_reward, std = evaluate_policy(model, env, n_eval_episodes=5)
     # print(f"Mean reward = {mean_reward:.2f} +/- {std}")
+    # exit()
 
     # env = check_env(env)
     model = TQC(
@@ -184,4 +187,8 @@ if __name__ == "__main__":
     #     while not done:
     #
     #         action = np.zeros((12,))
-    #         _, reward, done, info = env.step(dict(offset=action))
+    #         action[1] = -0.02
+    #         action[4] = -0.02
+    #         # action[7] = -0.02
+    #         # action[10] = -0.02
+    #         _, reward, done, info = env.step(action)

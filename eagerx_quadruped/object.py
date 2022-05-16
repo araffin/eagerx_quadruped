@@ -303,6 +303,7 @@ class Quadruped(Object):
             vel_target=np.zeros(len(go1_config.JOINT_NAMES)).tolist(),
             pos_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
             vel_gain=np.ones(len(go1_config.JOINT_NAMES)).tolist(),
+            max_force=(10 * np.ones(len(go1_config.JOINT_NAMES))).tolist(),
         )
         # Connect all engine nodes
         graph.add(
