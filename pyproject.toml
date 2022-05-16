@@ -10,8 +10,8 @@ documentation = "https://eagerx.readthedocs.io/en/master/"
 
 [tool.poetry.dependencies]
 python = "^3.7"
-eagerx = "^0.1.22"
-eagerx-pybullet = "^0.1.7"
+eagerx = "^0.1.23"
+eagerx-pybullet = "^0.1.8"
 
 [tool.black]
 line-length = 127
