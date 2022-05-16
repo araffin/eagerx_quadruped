@@ -177,8 +177,8 @@ if __name__ == "__main__":
     env = Flatten(env)
 
     if args.load_checkpoint is not None:
-        print(f"Loading {args.log_folder}/rl_model_{args.load_checkpoint}_steps.zip")
-        model = TQC.load(f"{args.log_folder}/rl_model_{args.load_checkpoint}_steps.zip")
+        print(f"Loading {args.folder}/rl_model_{args.load_checkpoint}_steps.zip")
+        model = TQC.load(f"{args.folder}/rl_model_{args.load_checkpoint}_steps.zip")
         mean_reward, std = evaluate_policy(model, env, n_eval_episodes=5)
         print(f"Mean reward = {mean_reward:.2f} +/- {std}")
         exit()
