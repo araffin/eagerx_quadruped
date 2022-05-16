@@ -7,6 +7,8 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
 """
 
 # Registers PybulletEngine
+import argparse
+
 import eagerx
 import eagerx_pybullet  # noqa: F401
 import numpy as np
@@ -32,9 +34,28 @@ import eagerx_quadruped.robots.go1.configs_go1 as go1_config  # noqa: F401
 # todo: Reduce dimension of force_torque sensor (gives [Fx, Fy, Fz, Mx, My, Mz] PER joint --> 6 * 12=72 dimensions).
 # todo: Tune sensor rates to the lowest possible.
 
-if __name__ == "__main__":
 
-    episode_timeout = 10.0  # in s
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", "--folder", help="Log folder", type=str, default="logs")
+    parser.add_argument(
+        "-l",
+        "--load-checkpoint",
+        type=int,
+        help="Load checkpoint instead of last model if available, "
+        "you must pass the number of timesteps corresponding to it",
+    )
+    # parser.add_argument(
+    #     "--load-last-checkpoint",
+    #     action="store_true",
+    #     default=False,
+    #     help="Load last checkpoint instead of last model if available",
+    # )
+    parser.add_argument("-t", "--timeout", help="Episode timeout in second", type=int, default=10)
+    parser.add_argument("--render", action="store_true", default=False, help="Show GUI")
+    args = parser.parse_args()
+
+    episode_timeout = args.timeout  # in s
     env_rate = 20
     cpg_rate = 200
     cartesian_rate = 200
@@ -114,11 +135,13 @@ if __name__ == "__main__":
     # Show in the gui
     # graph.gui()
 
+    show_gui = args.render or args.load_checkpoint is not None
+
     # Define engine
     engine = eagerx.Engine.make(
         "PybulletEngine",
         rate=sim_rate,
-        gui=False,
+        gui=show_gui,
         egl=True,
         sync=True,
         real_time_factor=0,
@@ -131,16 +154,18 @@ if __name__ == "__main__":
         # Go forward
         # desired_velocity = np.array([1.0, 0.0])
         # Go on the side, in circle
-        desired_velocity = np.array([0.3, 0.4])
+        desired_velocity = np.array([0.1, 0.4])
         alive_bonus = 1.0
+        # current_vel = (obs["base_pos"][0] - prev_obs["base_pos"][0]) * env_rate
         reward = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
+        # reward = alive_bonus - np.linalg.norm(desired_velocity - current_vel)
         # print(obs["base_vel"][0][:2])
         # print(reward)
         # Convert Quaternion to Euler
         roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][0])
         # print(list(map(np.rad2deg, (roll, pitch, yaw))))
         has_fallen = abs(np.rad2deg(roll)) > 40 or abs(np.rad2deg(pitch)) > 40
-        timeout = steps > int(episode_timeout * env_rate)
+        timeout = steps >= int(episode_timeout * env_rate)
 
         # Determine done flag
         done = timeout or has_fallen
@@ -152,22 +177,24 @@ if __name__ == "__main__":
     env = eagerx.EagerxEnv(name="rx", rate=20, graph=graph, engine=engine, step_fn=step_fn)
     env = Flatten(env)
 
-    # model = TQC.load("logs/rl_model_30000_steps.zip")
-    # mean_reward, std = evaluate_policy(model, env, n_eval_episodes=5)
-    # print(f"Mean reward = {mean_reward:.2f} +/- {std}")
-    # exit()
+    if args.load_checkpoint is not None:
+        print(f"Loading logs/rl_model_{args.load_checkpoint}_steps.zip")
+        model = TQC.load(f"logs/rl_model_{args.load_checkpoint}_steps.zip")
+        mean_reward, std = evaluate_policy(model, env, n_eval_episodes=5)
+        print(f"Mean reward = {mean_reward:.2f} +/- {std}")
+        exit()
 
     # env = check_env(env)
     model = TQC(
         "MlpPolicy",
         env,
-        learning_rate=7e-4,
+        learning_rate=1e-3,
         tau=0.02,
         gamma=0.98,
         buffer_size=300000,
         learning_starts=0,
-        use_sde=True,
-        use_sde_at_warmup=True,
+        # use_sde=True,
+        # use_sde_at_warmup=True,
         train_freq=8,
         gradient_steps=8,
         verbose=1,
@@ -175,7 +202,7 @@ if __name__ == "__main__":
     )
 
     # Save a checkpoint every 10000 steps
-    checkpoint_callback = CheckpointCallback(save_freq=10000, save_path="./logs/", name_prefix="rl_model")
+    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path="./logs/", name_prefix="rl_model")
 
     try:
         model.learn(1_000_000, callback=checkpoint_callback)
