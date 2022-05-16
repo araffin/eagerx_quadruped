@@ -21,10 +21,10 @@ class Quadruped(Object):
     @register.sensors(
         pos=Float32MultiArray,
         vel=Float32MultiArray,
+        force_torque=Float32MultiArray,
         base_orientation=Float32MultiArray,
         base_pos=Float32MultiArray,
         base_vel=Float32MultiArray,
-        reaction_force=Float32MultiArray,
     )
     @register.actuators(
         joint_control=Float32MultiArray,
@@ -63,6 +63,7 @@ class Quadruped(Object):
         import eagerx.converters  # noqa
 
         # Set observation properties: (space_converters, rate, etc...)
+        # TODO: specify correct limits
         spec.sensors.pos.rate = rate
         spec.sensors.pos.space_converter = SpaceConverter.make(
             "Space_Float32MultiArray",
@@ -71,12 +72,23 @@ class Quadruped(Object):
             high=go1_config.RL_UPPER_ANGLE_JOINT.tolist(),
         )
 
+        # TODO: specify correct limits
         spec.sensors.vel.rate = rate
         spec.sensors.vel.space_converter = SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
             low=(-go1_config.VELOCITY_LIMITS).tolist(),
             high=go1_config.VELOCITY_LIMITS.tolist(),
+        )
+
+        # TODO: specify correct limits
+        # TODO: HIGH DIMENSIONAL!! 6 measurements / joint
+        spec.sensors.force_torque.rate = rate
+        spec.sensors.force_torque.space_converter = SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=[0] * 6 * len(go1_config.RL_LOWER_ANGLE_JOINT),
+            high=[0] * 6 * len(go1_config.RL_LOWER_ANGLE_JOINT),
         )
 
         # TODO: specify correct limits
@@ -88,7 +100,7 @@ class Quadruped(Object):
             high=list(go1_config.INIT_ORIENTATION),
         )
 
-        # TODO: BEGIN
+        # TODO: specify correct limits
         spec.sensors.base_pos.rate = rate
         spec.sensors.base_pos.space_converter = SpaceConverter.make(
             "Space_Float32MultiArray",
@@ -104,15 +116,6 @@ class Quadruped(Object):
             low=[-1.0, -1.0, -0.2],
             high=[1.0, 1.0, 0.2],
         )
-
-        spec.sensors.reaction_force.rate = rate
-        spec.sensors.reaction_force.space_converter = SpaceConverter.make(
-            "Space_Float32MultiArray",
-            dtype="float32",
-            low=list(go1_config.INIT_ORIENTATION),
-            high=list(go1_config.INIT_ORIENTATION),
-        )
-        # TODO: END
 
         # Set actuator properties: (space_converters, rate, etc...)
         spec.actuators.joint_control.rate = rate
@@ -253,10 +256,14 @@ class Quadruped(Object):
             joints=spec.config.joint_names,
             mode="velocity",
         )
-
-        # torque_sensor = EngineNode.make(
-        #     "JointSensor", "torque_sensor", rate=rate, process=eagerx.process.ENGINE, joints=spec.config.joint_names, mode="applied_torque",
-        # )
+        force_torque_sensor = EngineNode.make(
+            "JointSensor",
+            "force_torque_sensor",
+            rate=rate,
+            process=eagerx.process.ENGINE,
+            joints=spec.config.joint_names,
+            mode="force_torque",
+        )
 
         # TODO: convert to euler (currently quaternion)
         base_orientation = EngineNode.make(
@@ -266,6 +273,22 @@ class Quadruped(Object):
             process=eagerx.process.ENGINE,
             links=None,
             mode="orientation",
+        )
+        base_position = EngineNode.make(
+            "LinkSensor",
+            "base_position_sensor",
+            rate=rate,
+            process=eagerx.process.ENGINE,
+            links=None,
+            mode="position",
+        )
+        base_velocity = EngineNode.make(
+            "LinkSensor",
+            "base_velocity_sensor",
+            rate=rate,
+            process=eagerx.process.ENGINE,
+            links=None,
+            mode="velocity",
         )
 
         # Create actuator engine nodes
@@ -286,13 +309,19 @@ class Quadruped(Object):
             [
                 pos_sensor,
                 vel_sensor,
+                force_torque_sensor,
                 base_orientation,
+                base_position,
+                base_velocity,
                 joint_control,
             ]
         )
         graph.connect(source=pos_sensor.outputs.obs, sensor="pos")
         graph.connect(source=vel_sensor.outputs.obs, sensor="vel")
+        graph.connect(source=force_torque_sensor.outputs.obs, sensor="force_torque")
         graph.connect(source=base_orientation.outputs.obs, sensor="base_orientation")
+        graph.connect(source=base_position.outputs.obs, sensor="base_pos")
+        graph.connect(source=base_velocity.outputs.obs, sensor="base_vel")
         graph.connect(actuator="joint_control", target=joint_control.inputs.action)
 
         # Check graph validity (commented out)

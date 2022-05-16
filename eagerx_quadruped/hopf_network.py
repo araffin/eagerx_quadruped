@@ -1,5 +1,36 @@
 import numpy as np
-from scipy.integrate import odeint
+from functools import partial
+
+
+# Runge Kutta taking the EOM as an argument
+def runge_kutta4(x, ode, dt):
+    k1 = ode(x)
+    k2 = ode(x + 0.5 * dt * k1)
+    k3 = ode(x + 0.5 * dt * k2)
+    k4 = ode(x + dt * k3)
+    return x + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+
+def ode(omega_swing, omega_stance, mu, alpha, couple, coupling_strength, PHI, x):
+    r = x[:4]
+    theta = x[4:]
+
+    # Calculate r_dot
+    dr = alpha * r * (mu - r**2)
+
+    # Calculate theta dot
+    dtheta = np.array([0, 0, 0, 0], dtype="float32")
+    mask = np.sin(theta) > 0
+    dtheta[mask] = omega_swing
+    dtheta[~mask] = omega_stance
+
+    # Calculate coupling
+    if couple:
+        for i in range(4):
+            for j in range(4):
+                if j != i:
+                    dtheta[i] += r[j] * coupling_strength * np.sin(theta[j] - theta[i] - PHI[i, j])
+    return np.array([dr[0], dr[1], dr[2], dr[3], dtheta[0], dtheta[1], dtheta[2], dtheta[3]], dtype="float32")
 
 
 class HopfNetwork:
@@ -35,6 +66,7 @@ class HopfNetwork:
         self._couple = couple
         self._coupling_strength = coupling_strength
         self._dt = time_step
+        self.t = None
         self._set_gait(gait)
 
         # save body and foot shaping
@@ -43,10 +75,12 @@ class HopfNetwork:
         self._robot_height = robot_height
         self._des_step_len = des_step_len
 
+        self.ode = partial(
+            ode, self._omega_swing, self._omega_stance, self._mu, 50, self._couple, self._coupling_strength, self.PHI
+        )
+
     def _set_gait(self, gait):
-        """For coupling oscillators in phase space.
-        [TODO] update all coupling matrices
-        """
+        """For coupling oscillators in phase space."""
         self.PHI_trot = np.pi * np.array(
             [
                 [0, -1, -1, 0],
@@ -103,24 +137,14 @@ class HopfNetwork:
         print(gait)
 
     def reset(self):
+        # reset current time
+        self.t = 0
         # set oscillator initial conditions
         self.X[0, :] = 0.1
         # initialize so we are in stance phase for the trot gait
         self.X[1, :] = (self.PHI[0, :] + 4 / 3 * np.pi) % (2 * np.pi)
 
-    def update(self):
-        """Update oscillator states."""
-        # todo: modify _integrate_hopf_equations to ode
-        # x = self.X.reshape((-1,)).copy()
-        # params = (self._omega_swing, self._omega_stance, self._mu, 50, self._couple, self._coupling_strength, self.PHI)
-        # x = odeint(self.ode, x, [0., self._dt], args=params, rtol=2e-8, atol=2e-8, hmax=0.0, hmin=0.0, mxstep=0)[-1]
-        # X = x.reshape(2, 4)
-        # X[1, :] = X[1, :] % (2 * np.pi)
-        # self.X = X
-
-        # update parameters, integrate
-        self._integrate_hopf_equations()
-
+    def get_xs_zs(self):
         # map CPG variables to Cartesian foot xz positions (Equations 8, 9)
         r = self.X[0, :]
         theta = self.X[1, :]
@@ -131,8 +155,22 @@ class HopfNetwork:
         above_ground = np.sin(theta) > 0
         ground_offset = above_ground * ground_clearance + (1.0 - above_ground) * ground_penetration
         z = -self._robot_height + ground_offset
-
         return x, z
+
+    def update(self):
+        """Update oscillator states."""
+        # update parameters, integrate
+        # self._integrate_hopf_equations()
+
+        # Predict with rk4
+        x = self.X.reshape((-1,)).copy()
+        x = runge_kutta4(x, self.ode, self._dt)
+        X = x.reshape(2, 4)
+        X[1, :] = X[1, :] % (2 * np.pi)
+        self.X = X
+
+        # move forward time
+        self.t += self._dt
 
     def _integrate_hopf_equations(self):
         """Hopf polar equations and integration. Use equations 6 and 7."""
@@ -171,25 +209,3 @@ class HopfNetwork:
 
         # self.X_list.append(self.X.copy())
         # self.dX_list.append(X_dot)
-
-    @staticmethod
-    def ode(x, t, omega_swing, omega_stance, mu, alpha, couple, coupling_strength, PHI):
-        r = x[:4]
-        theta = x[4:]
-
-        # Calculate r_dot
-        dr = alpha * r * (mu - r**2)
-
-        # Calculate theta dot
-        dtheta = np.zeros(4, dtype="float32")
-        mask = np.sin(theta) > 0
-        dtheta[mask] = omega_swing
-        dtheta[~mask] = omega_stance
-
-        # Calculate coupling
-        if couple:
-            for i in range(4):
-                for j in range(4):
-                    if j != i:
-                        dtheta[i] += r[j] * coupling_strength * np.sin(theta[j] - theta[i] - PHI[i, j])
-        return dr.tolist() + dtheta.tolist()

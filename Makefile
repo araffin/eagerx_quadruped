@@ -20,7 +20,7 @@ format: codestyle
 
 codestyle:
 	# Sort imports
-	#isort ${LINT_PATHS}
+	isort ${LINT_PATHS}
 	# Reformat using black
 	black ${LINT_PATHS}
 

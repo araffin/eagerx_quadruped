@@ -6,7 +6,6 @@ from eagerx.utils.utils import Msg
 from std_msgs.msg import Float32MultiArray
 
 from eagerx_quadruped.hopf_network import HopfNetwork
-import eagerx_quadruped.robots.go1.configs_go1 as go1_config
 
 
 class CpgGait(eagerx.Node):
@@ -49,7 +48,7 @@ class CpgGait(eagerx.Node):
         :return: NodeSpec
         """
         # Modify default params
-        spec.config.update(name=name, rate=rate, process=process, inputs=["offset"], outputs=["cartesian_pos"])
+        spec.config.update(name=name, rate=rate, process=process, inputs=["offset"], outputs=["cartesian_pos", "xs_zs"])
 
         # Modify params (args to .initialize())
         spec.config.update(mu=mu, gait=gait, omega_swing=omega_swing, omega_stance=omega_stance)
@@ -57,12 +56,20 @@ class CpgGait(eagerx.Node):
         spec.config.update(couple=couple, coupling_strength=coupling_strength)
         spec.config.update(robot_height=robot_height, des_step_len=des_step_len)
 
-        # Define action limits  TODO: fix correct limits
+        # TODO Define action limits
         spec.inputs.offset.space_converter = eagerx.SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
-            low=go1_config.NOMINAL_FOOT_POS_LEG_FRAME.tolist(),
-            high=go1_config.NOMINAL_FOOT_POS_LEG_FRAME.tolist(),
+            low=[0] * 12,
+            high=[0] * 12,
+        )
+
+        # Experimentally obtained. Above offset should be taken into account --> include y?
+        spec.outputs.xs_zs.space_converter = eagerx.SpaceConverter.make(
+            "Space_Float32MultiArray",
+            dtype="float32",
+            low=[-0.05656145, -0.26999995, -0.05656852, -0.2699973],  # expected high of unique [xs, zs, xs, zs] values
+            high=[0.05636625, -0.21000053, 0.05642071, -0.21001561],  # expected high of unique [xs, zs, xs, zs] values
         )
 
     def initialize(
@@ -78,6 +85,7 @@ class CpgGait(eagerx.Node):
         robot_height,
         des_step_len,
     ):
+        assert gait == "TROT", "xs_zs is only correct for TROT gait."
         self.n_legs = 4
         self.side_sign = np.array([-1, 1, -1, 1])  # get correct hip sign (body right is negative)
         self.foot_y = 0.0838  # this is the hip length
@@ -86,9 +94,9 @@ class CpgGait(eagerx.Node):
             gait=gait,
             omega_swing=omega_swing,
             omega_stance=omega_stance,
-            time_step=1 / self.rate,
-            ground_clearance=0.04,  # foot swing height
-            ground_penetration=0.02,  # foot stance penetration into ground
+            time_step=0.005,  # Always update cpg with 200 Hz.
+            ground_clearance=ground_clearance,  # foot swing height
+            ground_penetration=ground_penetration,  # foot stance penetration into ground
             robot_height=robot_height,  # in nominal case (standing)
             des_step_len=des_step_len,  # 0 for jumping
         )
@@ -98,10 +106,17 @@ class CpgGait(eagerx.Node):
         self.cpg.reset()
 
     @register.inputs(offset=Float32MultiArray)
-    @register.outputs(cartesian_pos=Float32MultiArray)
+    @register.outputs(cartesian_pos=Float32MultiArray, xs_zs=Float32MultiArray)
     def callback(self, t_n: float, offset: Msg):
+        # update CPG
+        while self.cpg.t <= t_n:
+            self.cpg.update()
+
         # get desired foot positions from CPG
-        xs, zs = self.cpg.update()
+        xs, zs = self.cpg.get_xs_zs()
+
+        # get unique xs & zs positions (BASED ON TROT)
+        unique_xs_zs = np.array([xs[0], zs[0], xs[1], zs[1]], dtype="float32")
 
         action = np.zeros((12,))
         for i in range(self.n_legs):
@@ -111,4 +126,4 @@ class CpgGait(eagerx.Node):
 
         # Add offset
         action += np.array(offset.msgs[-1].data, dtype="float32")
-        return dict(cartesian_pos=Float32MultiArray(data=action))
+        return dict(cartesian_pos=Float32MultiArray(data=action), xs_zs=Float32MultiArray(data=unique_xs_zs))
