@@ -188,7 +188,7 @@ if __name__ == "__main__":
     graph.connect(observation="velocity", source=robot.sensors.vel)
     graph.connect(observation="base_pos", source=robot.sensors.base_pos)
     graph.connect(observation="base_vel", source=robot.sensors.base_vel)
-    graph.connect(observation="base_orientation", source=robot.sensors.base_orientation) # window=2
+    graph.connect(observation="base_orientation", source=robot.sensors.base_orientation)  # window=2
     graph.connect(
         observation="xs_zs",
         source=cpg.outputs.xs_zs,
@@ -280,7 +280,7 @@ if __name__ == "__main__":
         gradient_steps=10,
         verbose=1,
         top_quantiles_to_drop_per_net=0,
-        policy_kwargs=dict(n_critics=1),
+        policy_kwargs=dict(n_critics=1, net_arch=dict(pi=[64, 64], qf=[64, 64])),
     )
     if args.hyperparams is not None:
         hyperparams.update(args.hyperparams)
