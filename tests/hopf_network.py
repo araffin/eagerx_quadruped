@@ -180,6 +180,7 @@ if __name__ == "__main__":
     graph.add(cpg)
 
     # Connect the nodes
+    # Note: base angular velocity missing
     graph.connect(action="offset", target=cpg.inputs.offset)
     graph.connect(source=cpg.outputs.cartesian_pos, target=cartesian_control.inputs.cartesian_pos)
     graph.connect(source=cartesian_control.outputs.joint_pos, target=robot.actuators.joint_control)
@@ -187,7 +188,7 @@ if __name__ == "__main__":
     graph.connect(observation="velocity", source=robot.sensors.vel)
     graph.connect(observation="base_pos", source=robot.sensors.base_pos)
     graph.connect(observation="base_vel", source=robot.sensors.base_vel)
-    graph.connect(observation="base_orientation", source=robot.sensors.base_orientation)
+    graph.connect(observation="base_orientation", source=robot.sensors.base_orientation) # window=2
     graph.connect(
         observation="xs_zs",
         source=cpg.outputs.xs_zs,
@@ -218,7 +219,7 @@ if __name__ == "__main__":
     # Define step function
     def step_fn(prev_obs, obs, action, steps):
         # Calculate reward
-        alive_bonus = 1.0
+        alive_bonus = 0.25
 
         # Convert Quaternion to Euler
         _, _, prev_yaw = pybullet.getEulerFromQuaternion(prev_obs["base_orientation"][0])
@@ -228,10 +229,12 @@ if __name__ == "__main__":
         yaw_rate = (yaw - prev_yaw) * env_rate
         desired_yaw_rate = np.deg2rad(desired_velocity)
 
-        yaw_cost = np.linalg.norm(yaw_rate - desired_yaw_rate)
+        # yaw_cost = np.linalg.norm(yaw_rate - desired_yaw_rate)
+        yaw_cost = (yaw_rate - desired_yaw_rate) ** 2
         reward = alive_bonus - yaw_cost
 
         if args.debug:
+            # print(len(obs["base_vel"][0]), len(obs["velocity"][0]))
             print(yaw_cost)
             # print(obs["base_vel"][0][:2])
 
@@ -254,6 +257,7 @@ if __name__ == "__main__":
         engine=engine,
         step_fn=step_fn,
     )
+
     env = Flatten(env)
 
     if args.load_checkpoint is not None:
@@ -275,10 +279,11 @@ if __name__ == "__main__":
         train_freq=8,
         gradient_steps=10,
         verbose=1,
-        top_quantiles_to_drop_per_net=2,
+        top_quantiles_to_drop_per_net=0,
         policy_kwargs=dict(n_critics=1),
     )
-    hyperparams.update(args.hyperparams)
+    if args.hyperparams is not None:
+        hyperparams.update(args.hyperparams)
 
     config = deepcopy(vars(args))
     config.update(hyperparams)
