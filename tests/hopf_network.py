@@ -333,14 +333,9 @@ if __name__ == "__main__":
         model.learn(1_000_000, callback=checkpoint_callback)
     except KeyboardInterrupt:
         model.save("tqc_cpg")
-
-    # while True:
-    #     obs, done = env.reset(), False
-    #     while not done:
-    #
-    #         action = np.zeros((12,))
-    #         action[1] = -0.02
-    #         action[4] = -0.02
-    #         # action[7] = -0.02
-    #         # action[10] = -0.02
-    #         _, reward, done, info = env.step(action)
+        
+    print("Shutting down")
+    env.shutdown()
+    if roscore:
+        roscore.shutdown()
+    print("Shutdown")
