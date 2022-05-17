@@ -98,8 +98,9 @@ if __name__ == "__main__":
     #     help="Load last checkpoint instead of last model if available",
     # )
     parser.add_argument("-t", "--timeout", help="Episode timeout in second", type=int, default=10)
-    parser.add_argument("-v", "--desired-vel", help="Desired velocity", type=float, nargs=2, default=[0.3, 0.4])
+    parser.add_argument("-v", "--desired-vel", help="Desired angular velocity (yaw vel)", type=float, default=20)
     parser.add_argument("--render", action="store_true", default=False, help="Show GUI")
+    parser.add_argument("--debug", action="store_true", default=False, help="Show debug")
     parser.add_argument(
         "-params",
         "--hyperparams",
@@ -126,8 +127,8 @@ if __name__ == "__main__":
     # set_random_seed(1)
 
     env_id = "Quadruped"
-    desired_velocity = np.array(args.desired_vel)
-    print(f"Desired velocity: {desired_velocity}")
+    desired_velocity = args.desired_vel
+    print(f"Desired angular velocity: {desired_velocity} deg/s")
 
     roscore = eagerx.initialize("eagerx_core", anonymous=True, log_level=eagerx.log.INFO)
 
@@ -223,12 +224,29 @@ if __name__ == "__main__":
         # desired_velocity = np.array([0.2, 0.5])
         alive_bonus = 1.0
 
-        reward = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
+        # Convert Quaternion to Euler
+        roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][0])
+        _, _, prev_yaw = pybullet.getEulerFromQuaternion(prev_obs["base_orientation"][0])
+        yaw_rate = (yaw - prev_yaw) * env_rate
+
+        # v_norm = np.linalg.norm(obs["base_vel"][0][:2])
+        desired_yaw_rate = np.deg2rad(desired_velocity)
+
+        # forward_cost = np.linalg.norm(desired_v_norm - v_norm)
+        yaw_cost = np.linalg.norm(yaw_rate - desired_yaw_rate)
+        reward = alive_bonus - yaw_cost  # - forward_cost
+
+        if args.debug:
+            # current_vel = (obs["base_pos"][0][:2] - prev_obs["base_pos"][0][:2]) * env_rate
+            # print(v_norm, yaw_rate)
+            print(yaw_cost)
+            # print(obs["base_vel"][0][:2])
+
+        # reward = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
         # reward = alive_bonus - np.linalg.norm(desired_velocity - current_vel)
         # print(obs["base_vel"][0][:2])
         # print(reward)
-        # Convert Quaternion to Euler
-        roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][0])
+
         # print(list(map(np.rad2deg, (roll, pitch, yaw))))
         has_fallen = abs(np.rad2deg(roll)) > 40 or abs(np.rad2deg(pitch)) > 40
         timeout = steps >= int(episode_timeout * env_rate)
@@ -269,13 +287,14 @@ if __name__ == "__main__":
         train_freq=8,
         gradient_steps=10,
         verbose=1,
+        top_quantiles_to_drop_per_net=2,
         policy_kwargs=dict(n_critics=1),
     )
     hyperparams.update(args.hyperparams)
 
     config = deepcopy(vars(args))
     config.update(hyperparams)
-    config.update(dict(desired_velocity=desired_velocity.tolist()))
+    config.update(dict(desired_velocity=desired_velocity))
 
     if args.track:
         try:
@@ -311,9 +330,8 @@ if __name__ == "__main__":
     print(f"Saving to {log_path}")
 
     # save hyperparams
-    hyperparams.update(dict(desired_velocity=desired_velocity.tolist()))
     with open(f"{log_path}/config.yml", "w") as f:
-        yaml.dump(hyperparams, f)
+        yaml.dump(config, f)
 
     # Save a checkpoint every 10000 steps
     checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=log_path, name_prefix="rl_model")
