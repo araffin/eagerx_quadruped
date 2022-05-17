@@ -10,7 +10,9 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
 import argparse
 import glob
 import os
+import time
 import uuid
+from copy import deepcopy
 
 import eagerx
 import eagerx_pybullet  # noqa: F401
@@ -105,6 +107,12 @@ if __name__ == "__main__":
         nargs="+",
         action=StoreDict,
         help="Overwrite hyperparameter (e.g. learning_rate:0.01 train_freq:10)",
+    )
+    parser.add_argument(
+        "--track",
+        action="store_true",
+        default=False,
+        help="if toggled, this experiment will be tracked with Weights and Biases",
     )
 
     args = parser.parse_args()
@@ -265,6 +273,30 @@ if __name__ == "__main__":
     )
     hyperparams.update(args.hyperparams)
 
+    config = deepcopy(vars(args))
+    config.update(hyperparams)
+    config.update(dict(desired_velocity=desired_velocity.tolist()))
+
+    if args.track:
+        try:
+            import wandb
+        except ImportError:
+            raise ImportError(
+                "if you want to use Weights & Biases to track experiment, please install W&B via `pip install wandb`"
+            )
+
+        run_name = f"{env_id}__TQC__{int(time.time())}"
+        run = wandb.init(
+            name=run_name,
+            project="eagerx",
+            entity="sb3",
+            config=config,
+            sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
+            monitor_gym=True,  # auto-upload the videos of agents playing the game
+            save_code=True,  # optional
+        )
+        hyperparams["tensorboard_log"] = f"runs/{run_name}"
+
     # env = check_env(env)
     model = TQC("MlpPolicy", env, **hyperparams)
     # Save env config inside model
@@ -273,7 +305,7 @@ if __name__ == "__main__":
     log_path = args.folder
 
     exp_id = get_latest_run_id(log_path, env_id) + 1
-    log_path = os.path.join(log_path, str(exp_id))
+    log_path = os.path.join(log_path, f"{env_id}_{exp_id}")
     os.makedirs(log_path, exist_ok=True)
 
     # save hyperparams
