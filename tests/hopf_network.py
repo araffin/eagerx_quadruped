@@ -308,6 +308,8 @@ if __name__ == "__main__":
     log_path = os.path.join(log_path, f"{env_id}_{exp_id}")
     os.makedirs(log_path, exist_ok=True)
 
+    print(f"Saving to {log_path}")
+
     # save hyperparams
     hyperparams.update(dict(desired_velocity=desired_velocity.tolist()))
     with open(f"{log_path}/config.yml", "w") as f:
