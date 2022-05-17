@@ -218,34 +218,22 @@ if __name__ == "__main__":
     # Define step function
     def step_fn(prev_obs, obs, action, steps):
         # Calculate reward
-        # Go forward
-        # desired_velocity = np.array([1.0, 0.0])
-        # Go on the side, in circle
-        # desired_velocity = np.array([0.2, 0.5])
         alive_bonus = 1.0
 
         # Convert Quaternion to Euler
-        roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][0])
         _, _, prev_yaw = pybullet.getEulerFromQuaternion(prev_obs["base_orientation"][0])
-        yaw_rate = (yaw - prev_yaw) * env_rate
+        roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][0])
 
-        # v_norm = np.linalg.norm(obs["base_vel"][0][:2])
+        # Current angular velocity
+        yaw_rate = (yaw - prev_yaw) * env_rate
         desired_yaw_rate = np.deg2rad(desired_velocity)
 
-        # forward_cost = np.linalg.norm(desired_v_norm - v_norm)
         yaw_cost = np.linalg.norm(yaw_rate - desired_yaw_rate)
-        reward = alive_bonus - yaw_cost  # - forward_cost
+        reward = alive_bonus - yaw_cost
 
         if args.debug:
-            # current_vel = (obs["base_pos"][0][:2] - prev_obs["base_pos"][0][:2]) * env_rate
-            # print(v_norm, yaw_rate)
             print(yaw_cost)
             # print(obs["base_vel"][0][:2])
-
-        # reward = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
-        # reward = alive_bonus - np.linalg.norm(desired_velocity - current_vel)
-        # print(obs["base_vel"][0][:2])
-        # print(reward)
 
         # print(list(map(np.rad2deg, (roll, pitch, yaw))))
         has_fallen = abs(np.rad2deg(roll)) > 40 or abs(np.rad2deg(pitch)) > 40
