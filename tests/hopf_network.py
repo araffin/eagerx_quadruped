@@ -273,7 +273,7 @@ if __name__ == "__main__":
     log_path = args.folder
 
     exp_id = get_latest_run_id(log_path, env_id) + 1
-    log_path = os.path.join(log_path, exp_id)
+    log_path = os.path.join(log_path, str(exp_id))
     os.makedirs(log_path, exist_ok=True)
 
     # save hyperparams
