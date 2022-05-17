@@ -48,9 +48,9 @@ jobs:
       - name: Lint with flake8
         run: |
           make lint
-      - name: Type check
-        run: |
-          make type
+      # - name: Type check
+      #   run: |
+      #     make type
       #----------------------------------------------
       #  -----  install & configure ROS  -----
       #----------------------------------------------
