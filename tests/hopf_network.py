@@ -333,7 +333,7 @@ if __name__ == "__main__":
         model.learn(1_000_000, callback=checkpoint_callback)
     except KeyboardInterrupt:
         model.save("tqc_cpg")
-        
+
     print("Shutting down")
     env.shutdown()
     if roscore:
