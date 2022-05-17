@@ -212,7 +212,7 @@ if __name__ == "__main__":
         # Go forward
         # desired_velocity = np.array([1.0, 0.0])
         # Go on the side, in circle
-        desired_velocity = np.array([0.2, 0.5])
+        # desired_velocity = np.array([0.2, 0.5])
         alive_bonus = 1.0
 
         reward = alive_bonus - np.linalg.norm(desired_velocity - obs["base_vel"][0][:2])
