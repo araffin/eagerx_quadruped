@@ -8,11 +8,15 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
 
 # Registers PybulletEngine
 import argparse
+import glob
+import os
+import uuid
 
 import eagerx
 import eagerx_pybullet  # noqa: F401
 import numpy as np
 import pybullet
+import yaml
 from eagerx.wrappers import Flatten
 from sb3_contrib import TQC
 from stable_baselines3.common.callbacks import CheckpointCallback
@@ -34,6 +38,47 @@ import eagerx_quadruped.robots.go1.configs_go1 as go1_config  # noqa: F401
 # todo: Reduce dimension of force_torque sensor (gives [Fx, Fy, Fz, Mx, My, Mz] PER joint --> 6 * 12=72 dimensions).
 # todo: Tune sensor rates to the lowest possible.
 
+
+def get_latest_run_id(log_path: str, env_id: str) -> int:
+    """
+    Returns the latest run number for the given log name and log path,
+    by finding the greatest number in the directories.
+
+    :param log_path: path to log folder
+    :param env_id:
+    :return: latest run number
+    """
+    max_run_id = 0
+    for path in glob.glob(os.path.join(log_path, env_id + "_[0-9]*")):
+        file_name = os.path.basename(path)
+        ext = file_name.split("_")[-1]
+        if env_id == "_".join(file_name.split("_")[:-1]) and ext.isdigit() and int(ext) > max_run_id:
+            max_run_id = int(ext)
+    return max_run_id
+
+
+class StoreDict(argparse.Action):
+    """
+    Custom argparse action for storing dict.
+
+    In: args1:0.0 args2:"dict(a=1)"
+    Out: {'args1': 0.0, arg2: dict(a=1)}
+    """
+
+    def __init__(self, option_strings, dest, nargs=None, **kwargs):
+        self._nargs = nargs
+        super().__init__(option_strings, dest, nargs=nargs, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        arg_dict = {}
+        for arguments in values:
+            key = arguments.split(":")[0]
+            value = ":".join(arguments.split(":")[1:])
+            # Evaluate the string as python code
+            arg_dict[key] = eval(value)
+        setattr(namespace, self.dest, arg_dict)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--folder", help="Log folder", type=str, default="logs")
@@ -51,7 +96,17 @@ if __name__ == "__main__":
     #     help="Load last checkpoint instead of last model if available",
     # )
     parser.add_argument("-t", "--timeout", help="Episode timeout in second", type=int, default=10)
+    parser.add_argument("-v", "--desired-vel", help="Desired velocity", type=float, nargs=2, default=[0.3, 0.4])
     parser.add_argument("--render", action="store_true", default=False, help="Show GUI")
+    parser.add_argument(
+        "-params",
+        "--hyperparams",
+        type=str,
+        nargs="+",
+        action=StoreDict,
+        help="Overwrite hyperparameter (e.g. learning_rate:0.01 train_freq:10)",
+    )
+
     args = parser.parse_args()
 
     episode_timeout = args.timeout  # in s
@@ -61,6 +116,10 @@ if __name__ == "__main__":
     quad_rate = 200
     sim_rate = 200
     # set_random_seed(1)
+
+    env_id = "Quadruped"
+    desired_velocity = np.array(args.desired_vel)
+    print(f"Desired velocity: {desired_velocity}")
 
     roscore = eagerx.initialize("eagerx_core", anonymous=True, log_level=eagerx.log.INFO)
 
@@ -173,7 +232,14 @@ if __name__ == "__main__":
         return obs, reward, done, info
 
     # Initialize Environment
-    env = eagerx.EagerxEnv(name="rx", rate=20, graph=graph, engine=engine, step_fn=step_fn)
+    # Unique ID to be able to launch multiple instances
+    env = eagerx.EagerxEnv(
+        name=f"Quadruped{uuid.uuid4()}".replace("-", "_"),
+        rate=env_rate,
+        graph=graph,
+        engine=engine,
+        step_fn=step_fn,
+    )
     env = Flatten(env)
 
     if args.load_checkpoint is not None:
@@ -183,13 +249,11 @@ if __name__ == "__main__":
         print(f"Mean reward = {mean_reward:.2f} +/- {std}")
         exit()
 
-    # env = check_env(env)
-    model = TQC(
-        "MlpPolicy",
-        env,
+    # Default values
+    hyperparams = dict(
         learning_rate=1e-3,
         tau=0.02,
-        gamma=0.95,
+        gamma=0.98,
         buffer_size=300000,
         learning_starts=100,
         use_sde=True,
@@ -199,9 +263,26 @@ if __name__ == "__main__":
         verbose=1,
         policy_kwargs=dict(n_critics=1),
     )
+    hyperparams.update(args.hyperparams)
+
+    # env = check_env(env)
+    model = TQC("MlpPolicy", env, **hyperparams)
+    # Save env config inside model
+    model.desired_velocity = desired_velocity
+
+    log_path = args.folder
+
+    exp_id = get_latest_run_id(log_path, env_id) + 1
+    log_path = os.path.join(log_path, exp_id)
+    os.makedirs(log_path, exist_ok=True)
+
+    # save hyperparams
+    hyperparams.update(dict(desired_velocity=desired_velocity.tolist()))
+    with open(f"{log_path}/config.yml", "w") as f:
+        yaml.dump(hyperparams, f)
 
     # Save a checkpoint every 10000 steps
-    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=f"./{args.folder}/", name_prefix="rl_model")
+    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=log_path, name_prefix="rl_model")
 
     try:
         model.learn(1_000_000, callback=checkpoint_callback)
