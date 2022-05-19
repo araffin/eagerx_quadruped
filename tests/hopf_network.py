@@ -13,6 +13,10 @@ import os
 import time
 import uuid
 from copy import deepcopy
+from typing import Dict, Tuple
+
+import gym
+import numpy as np
 
 import eagerx
 import eagerx_pybullet  # noqa: F401
@@ -99,7 +103,7 @@ if __name__ == "__main__":
     # )
     parser.add_argument("-t", "--timeout", help="Episode timeout in second", type=int, default=10)
     parser.add_argument("-v", "--desired-vel", help="Desired angular velocity (yaw vel)", type=float, default=20)
-    parser.add_argument("--render", action="store_true", default=True, help="Show GUI")
+    parser.add_argument("--render", action="store_true", default=False, help="Show GUI")
     parser.add_argument("--debug", action="store_true", default=False, help="Show debug")
     parser.add_argument(
         "-params",
@@ -196,8 +200,9 @@ if __name__ == "__main__":
         graph.connect(observation="force_torque", source=robot.sensors.force_torque)
     if "base_vel" in sensors:
         graph.connect(observation="base_vel", source=robot.sensors.base_vel)
-    assert "base_orientation" in sensors, "The base_orientation must always be included in the sensors, " \
-                                          "because it is used to calculate the reward."
+    assert "base_orientation" in sensors, (
+        "The base_orientation must always be included in the sensors, because it is used to calculate the reward."
+    )
     graph.connect(observation="base_orientation", source=robot.sensors.base_orientation, window=2)  # window=2
     if "xs_zs" in sensors:
         graph.connect(
@@ -223,13 +228,10 @@ if __name__ == "__main__":
         process=eagerx.process.NEW_PROCESS,
     )
 
-    import numpy as np
-    from typing import Dict, Tuple
-    import gym
 
     class QuadrupedEnv(eagerx.BaseEnv):
         def __init__(self, name, rate, graph, engine, episode_timeout, force_start=True, debug=False):
-            super(QuadrupedEnv, self).__init__(name, rate, graph, engine, force_start=force_start)
+            super().__init__(name, rate, graph, engine, force_start=force_start)
             self.steps = None
             self.debug = debug
             self.timeout_steps = int(episode_timeout * rate)
