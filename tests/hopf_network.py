@@ -9,14 +9,9 @@ https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
 # Registers PybulletEngine
 import eagerx
 import eagerx_pybullet  # noqa: F401
-import numpy as np
 
 # Registers PybulletEngine
-import eagerx_quadruped.object  # noqa: F401
-import eagerx_quadruped.cartesian_control  # noqa: F401
-import eagerx_quadruped.cpg_gait  # noqa: F401
-import eagerx_quadruped.robots.go1.configs_go1 as go1_config  # noqa: F401
-
+from eagerx_quadruped.helper import add_quadruped
 
 # TODO: Use scipy to accurately integrate cpg
 # todo: Specify realistic spaces for cpg.inputs.offset, cpg.outputs.xs_zs
@@ -39,67 +34,10 @@ if __name__ == "__main__":
     # Initialize empty graph
     graph = eagerx.Graph.create()
 
-    # Create robot
-    robot = eagerx.Object.make(
-        "Quadruped",
-        "quadruped",
-        actuators=["joint_control"],
-        # sensors=["pos", "vel", "force_torque", "base_orientation", "base_pos", "base_vel"],
-        sensors=["pos", "vel", "base_orientation", "base_pos", "base_vel"],
-        rate=quad_rate,
-        control_mode="position_control",
-        self_collision=False,
-        fixed_base=False,
-    )
-    # TODO: tune sensor rates to the lowest possible.
-    robot.sensors.pos.rate = env_rate
-    robot.sensors.vel.rate = env_rate
-    robot.sensors.force_torque.rate = env_rate
-    robot.sensors.base_orientation.rate = env_rate
-    robot.sensors.base_pos.rate = env_rate
-    robot.sensors.base_vel.rate = env_rate
-    graph.add(robot)
+    # Add quadruped
+    for i in range(2):
+        add_quadruped(graph, f"quad_{i}", ["base_pos"], [0+i, 0, 0.33], base_orientation=[0, 0, 0, 1])
 
-    # Create cartesian control node
-    cc = eagerx.Node.make("CartesiandPDController", "cartesian_control", rate=cc_rate)
-    graph.add(cc)
-
-    # Create cpg node
-    gait = "TROT"
-    omega_swing, omega_stance = {
-        "JUMP": [4 * np.pi, 40 * np.pi],
-        "TROT": [16 * np.pi, 4 * np.pi],
-        "WALK": [16 * np.pi, 4 * np.pi],
-        "PACE": [20 * np.pi, 20 * np.pi],
-        "BOUND": [10 * np.pi, 20 * np.pi],
-    }[gait]
-    cpg = eagerx.Node.make("CpgGait", "cpg", rate=cpg_rate, gait=gait, omega_swing=omega_swing, omega_stance=omega_stance)
-    graph.add(cpg)
-
-    # Connect the nodes
-    graph.connect(action="offset", target=cpg.inputs.offset)
-    graph.connect(source=cpg.outputs.cartesian_pos, target=cc.inputs.cartesian_pos)
-    graph.connect(source=cc.outputs.joint_pos, target=robot.actuators.joint_control)
-    graph.connect(observation="position", source=robot.sensors.pos)
-    graph.connect(observation="velocity", source=robot.sensors.vel)
-    graph.connect(observation="base_pos", source=robot.sensors.base_pos)
-    graph.connect(observation="base_vel", source=robot.sensors.base_vel)
-    graph.connect(observation="base_orientation", source=robot.sensors.base_orientation)
-    graph.connect(
-        observation="xs_zs",
-        source=cpg.outputs.xs_zs,
-        skip=True,
-        initial_obs=[-0.01354526, -0.26941818, 0.0552178, -0.25434446],
-    )
-
-    # Optionally, add force_torque sensor
-    graph.add_component(robot.sensors.force_torque)
-    graph.connect(observation="force_torque", source=robot.sensors.force_torque)
-
-    # Show in the gui
-    graph.gui()
-
-    # Define engine
     engine = eagerx.Engine.make(
         "PybulletEngine",
         rate=sim_rate,
@@ -110,22 +48,53 @@ if __name__ == "__main__":
         process=eagerx.process.NEW_PROCESS,
     )
 
-    # Define step function
-    def step_fn(prev_obs, obs, action, steps):
-        # Calculate reward
-        rwd = 0
-        # Determine done flag
-        done = steps > int(T * env_rate)
-        # Set info:
-        info = dict()
-        return obs, rwd, done, info
+    # Define environment
+    import gym
+    from typing import Tuple, Dict
+
+
+    class ComposedEnv(eagerx.BaseEnv):
+        def __init__(self, name, rate, graph, engine, force_start=True):
+            super(ComposedEnv, self).__init__(name, rate, graph, engine, force_start=force_start)
+            self.steps = None
+
+        @property
+        def observation_space(self) -> gym.spaces.Dict:
+            return self._observation_space
+
+        @property
+        def action_space(self) -> gym.spaces.Dict:
+            return self._action_space
+
+        def reset(self):
+            # Reset number of steps
+            self.steps = 0
+            # Sample desired states
+            states = self.state_space.sample()
+            # Perform reset
+            obs = self._reset(states)
+            return obs
+
+        def step(self, action: Dict) -> Tuple[Dict, float, bool, Dict]:
+            # Apply action
+            obs = self._step(action)
+            self.steps += 1
+
+            # Determine when is the episode over
+            # currently just a timeout after 100 steps
+            done = self.steps > int(T * env_rate)
+
+            # Set info, tell the algorithm the termination was due to a timeout
+            # (the episode was truncated)
+            info = {"TimeLimit.truncated": self.steps > int(T * env_rate)}
+
+            return obs, 0., done, info
 
     # Initialize Environment
-    env = eagerx.EagerxEnv(name="rx", rate=20, graph=graph, engine=engine, step_fn=step_fn)
+    env = ComposedEnv(name="rx", rate=20, graph=graph, engine=engine)
 
+    action = env.action_space.sample()
     while True:
         obs, done = env.reset(), False
         while not done:
-
-            action = np.zeros((12,))
-            _, reward, done, info = env.step(dict(offset=action))
+            _, reward, done, info = env.step(action)

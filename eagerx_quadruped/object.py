@@ -137,15 +137,15 @@ class Quadruped(Object):
         spec.states.base_pos.space_converter = SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
-            low=go1_config.INIT_POSITION,
-            high=go1_config.INIT_POSITION,
+            low=spec.config.base_pos,
+            high=spec.config.base_pos,
         )
 
         spec.states.base_orientation.space_converter = SpaceConverter.make(
             "Space_Float32MultiArray",
             dtype="float32",
-            low=list(go1_config.INIT_ORIENTATION),
-            high=list(go1_config.INIT_ORIENTATION),
+            low=spec.config.base_orientation,
+            high=spec.config.base_orientation,
         )
 
         spec.states.base_velocity.space_converter = SpaceConverter.make(
@@ -195,10 +195,10 @@ class Quadruped(Object):
         # Modify default agnostic params
         # Only allow changes to the agnostic params (rates, windows, (space)converters, etc...
         spec.config.name = name
-        spec.config.sensors = sensors if sensors else ["pos", "vel", "base_orientation"]
-        spec.config.actuators = actuators if actuators else ["joint_control"]
+        spec.config.sensors = sensors if isinstance(sensors, list) else ["pos", "vel", "base_orientation"]
+        spec.config.actuators = actuators if isinstance(actuators, list) else ["joint_control"]
         spec.config.states = (
-            states if states else ["pos", "base_pos", "base_orientation", "base_velocity", "base_angular_velocity"]
+            states if isinstance(states, list) else ["pos", "base_pos", "base_orientation", "base_velocity", "base_angular_velocity"]
         )
 
         # Add registered agnostic params
