@@ -99,7 +99,7 @@ if __name__ == "__main__":
     # )
     parser.add_argument("-t", "--timeout", help="Episode timeout in second", type=int, default=10)
     parser.add_argument("-v", "--desired-vel", help="Desired angular velocity (yaw vel)", type=float, default=20)
-    parser.add_argument("--render", action="store_true", default=False, help="Show GUI")
+    parser.add_argument("--render", action="store_true", default=True, help="Show GUI")
     parser.add_argument("--debug", action="store_true", default=False, help="Show debug")
     parser.add_argument(
         "-params",
@@ -119,11 +119,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     episode_timeout = args.timeout  # in s
-    env_rate = 20
+    env_rate = 50
     cpg_rate = 200
     cartesian_rate = 200
     quad_rate = 200
     sim_rate = 200
+    # sensors = ["pos", "vel", "base_orientation", "base_pos", "base_vel", "force_torque"]  # Todo: works
+    # sensors = ["pos", "vel", "base_orientation", "base_pos", "base_vel"]
+    sensors = ["base_orientation", "force_torque"]
     # set_random_seed(1)
 
     env_id = "Quadruped"
@@ -140,8 +143,7 @@ if __name__ == "__main__":
         "Quadruped",
         "quadruped",
         actuators=["joint_control"],
-        # sensors=["pos", "vel", "force_torque", "base_orientation", "base_pos", "base_vel"],
-        sensors=["pos", "vel", "base_orientation", "base_pos", "base_vel"],
+        sensors=sensors,
         rate=quad_rate,
         control_mode="position_control",
         self_collision=False,
@@ -184,21 +186,26 @@ if __name__ == "__main__":
     graph.connect(action="offset", target=cpg.inputs.offset)
     graph.connect(source=cpg.outputs.cartesian_pos, target=cartesian_control.inputs.cartesian_pos)
     graph.connect(source=cartesian_control.outputs.joint_pos, target=robot.actuators.joint_control)
-    graph.connect(observation="position", source=robot.sensors.pos)
-    graph.connect(observation="velocity", source=robot.sensors.vel)
-    graph.connect(observation="base_pos", source=robot.sensors.base_pos)
-    graph.connect(observation="base_vel", source=robot.sensors.base_vel)
-    graph.connect(observation="base_orientation", source=robot.sensors.base_orientation)  # window=2
-    graph.connect(
-        observation="xs_zs",
-        source=cpg.outputs.xs_zs,
-        skip=True,
-        initial_obs=[-0.01354526, -0.26941818, 0.0552178, -0.25434446],
-    )
-
-    # Optionally, add force_torque sensor
-    graph.add_component(robot.sensors.force_torque)
-    graph.connect(observation="force_torque", source=robot.sensors.force_torque)
+    if "position" in sensors:
+        graph.connect(observation="position", source=robot.sensors.pos)
+    if "velocity" in sensors:
+        graph.connect(observation="velocity", source=robot.sensors.vel)
+    if "position" in sensors:
+        graph.connect(observation="base_pos", source=robot.sensors.base_pos)
+    if "force_torque" in sensors:
+        graph.connect(observation="force_torque", source=robot.sensors.force_torque)
+    if "base_vel" in sensors:
+        graph.connect(observation="base_vel", source=robot.sensors.base_vel)
+    assert "base_orientation" in sensors, "The base_orientation must always be included in the sensors, " \
+                                          "because it is used to calculate the reward."
+    graph.connect(observation="base_orientation", source=robot.sensors.base_orientation, window=2)  # window=2
+    if "xs_zs" in sensors:
+        graph.connect(
+            observation="xs_zs",
+            source=cpg.outputs.xs_zs,
+            skip=True,
+            initial_obs=[-0.01354526, -0.26941818, 0.0552178, -0.25434446],
+        )
 
     # Show in the gui
     # graph.gui()
@@ -216,48 +223,80 @@ if __name__ == "__main__":
         process=eagerx.process.NEW_PROCESS,
     )
 
-    # Define step function
-    def step_fn(prev_obs, obs, action, steps):
-        # Calculate reward
-        alive_bonus = 0.25
+    import numpy as np
+    from typing import Dict, Tuple
+    import gym
 
-        # Convert Quaternion to Euler
-        _, _, prev_yaw = pybullet.getEulerFromQuaternion(prev_obs["base_orientation"][0])
-        roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][0])
+    class QuadrupedEnv(eagerx.BaseEnv):
+        def __init__(self, name, rate, graph, engine, episode_timeout, force_start=True, debug=False):
+            super(QuadrupedEnv, self).__init__(name, rate, graph, engine, force_start=force_start)
+            self.steps = None
+            self.debug = debug
+            self.timeout_steps = int(episode_timeout * rate)
 
-        # Current angular velocity
-        yaw_rate = (yaw - prev_yaw) * env_rate
-        desired_yaw_rate = np.deg2rad(desired_velocity)
+        @property
+        def observation_space(self) -> gym.spaces.Dict:
+            return self._observation_space
 
-        # yaw_cost = np.linalg.norm(yaw_rate - desired_yaw_rate)
-        yaw_cost = (yaw_rate - desired_yaw_rate) ** 2
-        reward = alive_bonus - yaw_cost
+        @property
+        def action_space(self) -> gym.spaces.Dict:
+            return self._action_space
 
-        if args.debug:
-            # print(len(obs["base_vel"][0]), len(obs["velocity"][0]))
-            print(yaw_cost)
-            # print(obs["base_vel"][0][:2])
+        def reset(self):
+            # Reset number of steps
+            self.steps = 0
 
-        # print(list(map(np.rad2deg, (roll, pitch, yaw))))
-        has_fallen = abs(np.rad2deg(roll)) > 40 or abs(np.rad2deg(pitch)) > 40
-        timeout = steps >= int(episode_timeout * env_rate)
+            # Sample desired states
+            states = self.state_space.sample()
 
-        # Determine done flag
-        done = timeout or has_fallen
-        # Set info about episode truncation
-        info = {"TimeLimit.truncated": timeout and not has_fallen}
-        return obs, reward, done, info
+            # Perform reset
+            obs = self._reset(states)
+            return obs
+
+        def step(self, action: Dict) -> Tuple[Dict, float, bool, Dict]:
+            obs = self._step(action)
+            self.steps += 1
+
+            # Calculate reward
+            alive_bonus = 0.25
+
+            # Convert Quaternion to Euler
+            _, _, prev_yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][-2])
+            roll, pitch, yaw = pybullet.getEulerFromQuaternion(obs["base_orientation"][-1])
+
+            # Current angular velocity
+            yaw_rate = (yaw - prev_yaw) * env_rate
+            desired_yaw_rate = np.deg2rad(desired_velocity)
+
+            # yaw_cost = np.linalg.norm(yaw_rate - desired_yaw_rate)
+            yaw_cost = (yaw_rate - desired_yaw_rate) ** 2
+            reward = alive_bonus - yaw_cost
+
+            if self.debug:
+                # print(len(obs["base_vel"][0]), len(obs["velocity"][0]))
+                print(yaw_cost)
+                # print(obs["base_vel"][0][:2])
+
+            # print(list(map(np.rad2deg, (roll, pitch, yaw))))
+            has_fallen = abs(np.rad2deg(roll)) > 40 or abs(np.rad2deg(pitch)) > 40
+            timeout = self.steps >= self.timeout_steps
+
+            # Determine done flag
+            done = timeout or has_fallen
+            # Set info about episode truncation
+            info = {"TimeLimit.truncated": timeout and not has_fallen}
+            return obs, reward, done, info
 
     # Initialize Environment
     # Unique ID to be able to launch multiple instances
-    env = eagerx.EagerxEnv(
+    env = QuadrupedEnv(
         name=f"Quadruped{uuid.uuid4()}".replace("-", "_"),
         rate=env_rate,
         graph=graph,
         engine=engine,
-        step_fn=step_fn,
+        episode_timeout=episode_timeout,
+        debug=args.debug,
     )
-
     env = Flatten(env)
 
     if args.load_checkpoint is not None:
