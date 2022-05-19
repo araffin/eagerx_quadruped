@@ -4,7 +4,7 @@ setup(
     name="eagerx_quadruped",
     packages=[package for package in find_packages() if package.startswith("eagerx_quadruped")],
     # package_data={"sb3_contrib": ["py.typed", "version.txt"]},
-    install_requires=["eagerx>=0.1.23", "eagerx-pybullet>=0.1.8"],
+    install_requires=["eagerx>=0.1.24", "eagerx-pybullet>=0.1.8"],
     extras_require={
         "tests": [
             # Run tests and coverage
