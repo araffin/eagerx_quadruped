@@ -1,10 +1,10 @@
 # Registers butterworth_filter
 import eagerx.nodes  # noqa: F401
 
-# Registers PybulletBridge
+# Registers PybulletEngine
 import eagerx_pybullet  # noqa: F401
 
-# Registers PybulletBridge
+# Registers PybulletEngine
 from eagerx.core.env import EagerxEnv
 from eagerx.core.graph import Graph
 
@@ -42,9 +42,9 @@ def test_eagerx(skip=True):
     # Show in the gui
     # graph.gui()
 
-    # Define bridgesif
-    bridge = eagerx.Bridge.make(
-        "PybulletBridge",
+    # Define enginesif
+    engine = eagerx.Engine.make(
+        "PybulletEngine",
         rate=rate,
         gui=True,
         egl=True,
@@ -68,7 +68,7 @@ def test_eagerx(skip=True):
         name="rx",
         rate=rate,
         graph=graph,
-        bridge=bridge,
+        engine=engine,
         step_fn=step_fn,
     )
 

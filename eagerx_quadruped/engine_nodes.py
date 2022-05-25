@@ -20,9 +20,8 @@ class CartesiandPDController(EngineNode):
         name: str,
         rate: float,
         joints: List[str],
-        process: Optional[int] = p.BRIDGE,
+        process: Optional[int] = p.ENGINE,
         color: Optional[str] = "green",
-        # mode: str = "position_control",
         vel_gain: Optional[List[float]] = None,
         vel_target: Optional[List[float]] = None,
         pos_gain: Optional[List[float]] = None,
@@ -39,37 +38,23 @@ class CartesiandPDController(EngineNode):
         :param joints: List of controlled joints. Its order determines the ordering of the applied commands.
         :param process: Process in which this node is launched. See :class:`~eagerx.core.constants.process` for all options.
         :param color: Specifies the color of logged messages & node color in the GUI.
-        :param mode: Available: `position_control`, `velocity_control`, `pd_control`, and `torque_control`.
+        :param vel_gain: Velocity gain. Ordering according to `joints`.
         :param vel_target: The desired velocity. Ordering according to `joints`.
         :param pos_gain: Position gain. Ordering according to `joints`.
         :param max_force: Maximum force when mode in [`position_control`, `velocity_control`, `pd_control`]. Ordering
                           according to `joints`.
         :return: NodeSpec
         """
-        # Performs all the steps to fill-in the params with registered info about all functions.
-        spec.initialize(CartesiandPDController)
-
         # Modify default node params
         spec.config.update(
-            dict(
-                name=name,
-                rate=rate,
-                process=process,
-                inputs=["tick", "cartesian_pos"],
-                outputs=["action_applied"],
-                joints=joints,
-            )
+            name=name,
+            rate=rate,
+            process=process,
+            inputs=["tick", "cartesian_pos"],
+            outputs=["action_applied"],
+            joints=joints,
         )
-        # spec.config.name = name
-        # spec.config.rate = rate
-        # spec.config.process = process
-        # spec.config.inputs = ["tick", "cartesian_pos"]
-        # spec.config.outputs = ["action_applied"]
 
-        # Set parameters, defined by the signature of cls.initialize(...)
-        # spec.config.joints = joints
-
-        # spec.config.mode = mode
         spec.config.vel_target = vel_target if vel_target else [0.0] * len(joints)
         spec.config.pos_gain = pos_gain if pos_gain else [0.2] * len(joints)
         spec.config.vel_gain = vel_gain if vel_gain else [0.2] * len(joints)
@@ -78,8 +63,8 @@ class CartesiandPDController(EngineNode):
     def initialize(self, joints, mode, vel_target, pos_gain, vel_gain, max_force):
         # We will probably use self.simulator[self.obj_name] in callback & reset.
         self.obj_name = self.config["name"]
-        assert self.process == p.BRIDGE, (
-            "Simulation node requires a reference to the simulator," " hence it must be launched in the Bridge process"
+        assert self.process == p.ENGINE, (
+            "Simulation node requires a reference to the simulator," " hence it must be launched in the Engine process"
         )
         flag = self.obj_name in self.simulator["robots"]
         assert flag, f'Simulator object "{self.simulator}" is not compatible with this simulation node.'
@@ -192,42 +177,3 @@ class CartesiandPDController(EngineNode):
         )
         joint_angles = np.array([-shoulder_angle, elbow_angle, wrist_angle])
         return joint_angles
-
-    # def scale_action_to_cartesian_pos(self, actions):
-    #     """Scale RL action to Cartesian PD ranges.
-    #     Edit ranges, limits etc., but make sure to use Cartesian PD to compute the torques.
-    #     """
-    #     # clip RL actions to be between -1 and 1 (standard RL technique)
-    #     # print(actions)
-    #     u = np.clip(actions, -1, 1)
-    #     # scale to corresponding desired foot positions (i.e. ranges in x,y,z we allow the agent to choose foot positions)
-    #     scale_array = np.array([0.2, 0.05, 0.15] * 4)  # [0.1, 0.05, 0.08]*4)
-    #     # add to nominal foot position in leg frame (what are the final ranges?)
-    #     des_foot_pos = go1_config.NOMINAL_FOOT_POS_LEG_FRAME + scale_array * u
-    #     # get Cartesian kp and kd gains (can be modified)
-    #     kpCartesian = go1_config.kpCartesian
-    #     kdCartesian = go1_config.kdCartesian
-    #     # get current motor velocities
-    #     dq = self.robot.GetMotorVelocities()
-    #
-    #     action = np.zeros(12)
-    #     for i in range(4):
-    #         # Get current Jacobian and foot position in leg frame
-    #         J, xyz = self.robot.ComputeJacobianAndPosition(i)
-    #         # Get current foot velocity in leg frame
-    #         dxyz = J @ dq[3 * i : 3 * (i + 1)]
-    #         delta_foot_pos = xyz - des_foot_pos[3 * i : 3 * (i + 1)]
-    #
-    #         # clamp the motor command by the joint limit, in case weired things happens
-    #         if self._enable_action_clipping:
-    #             delta_foot_pos = np.clip(
-    #                 delta_foot_pos,
-    #                 -go1_config.MAX_CARTESIAN_FOOT_POS_CHANGE_PER_STEP,
-    #                 go1_config.MAX_CARTESIAN_FOOT_POS_CHANGE_PER_STEP,
-    #             )
-    #
-    #         F_foot = -kpCartesian @ delta_foot_pos - kdCartesian @ dxyz
-    #         # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
-    #         tau = J.T @ F_foot
-    #         action[3 * i : 3 * (i + 1)] = tau  # TODO: add white noise
-    #     return action
