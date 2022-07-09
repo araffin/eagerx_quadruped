@@ -38,3 +38,5 @@ If you are using EAGERx for your scientific publications, please cite:
 Acknowledgements
 =================
 EAGERx is funded by the `OpenDR <https://opendr.eu/>`_ Horizon 2020 project.
+
+The quadruped env was original created by `Guillaume Bellegarda <https://scholar.google.com/citations?user=YDimn5wAAAAJ&hl=en>`_
