@@ -1,3 +1,12 @@
+"""
+CPG in polar coordinates based on:
+Pattern generators with sensory feedback for the control of quadruped
+authors: L. Righetti, A. Ijspeert
+https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4543306
+Original author: Guillaume Bellegarda (https://scholar.google.com/citations?user=YDimn5wAAAAJ&hl=en)
+
+"""
+
 from functools import partial
 
 import numpy as np
